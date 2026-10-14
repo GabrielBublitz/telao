@@ -39,9 +39,12 @@ export type BroadcastOptions = {
   bitrateKbps: number;
   simulcast: boolean;
   contentHint: 'detail' | 'motion';
-  audio: boolean;
+  /** tab = só o som da aba compartilhada · system = som do PC inteiro (inclui Discord) · off = sem áudio */
+  audio: AudioMode;
   synthetic: boolean;
 };
+
+export type AudioMode = 'tab' | 'system' | 'off';
 
 export type CaptureSettings = { width: number | null; height: number | null; frameRate: number | null; surface: string | null };
 export type LayerInfo = { current: number | null; temporal: number | null; count: number };
@@ -637,7 +640,7 @@ export class RoomSession {
     let stopSynthetic: (() => void) | null = null;
     try {
       if (opts.synthetic) {
-        const s = createSyntheticStream(dims.width, dims.height, 30, opts.audio);
+        const s = createSyntheticStream(dims.width, dims.height, 30, opts.audio !== 'off');
         stream = s.stream;
         stopSynthetic = s.stop;
       } else {
@@ -647,10 +650,17 @@ export class RoomSession {
             height: { ideal: dims.height, max: dims.height },
             frameRate: { ideal: 30, max: 30 },
           },
-          // Som do PC/aba sem processamento de voz (música e jogos ficam fiéis).
-          audio: opts.audio ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
-          // Chrome/Edge: oferece "Compartilhar áudio do sistema" ao escolher a tela inteira.
-          ...(opts.audio ? { systemAudio: 'include' } : {}),
+          // Som sem processamento de voz (música e jogos ficam fiéis). restrictOwnAudio tira o som que o
+          // próprio Telão toca (outras transmissões) da captura; navegadores que não o suportam ignoram.
+          audio:
+            opts.audio === 'off'
+              ? false
+              : ({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, restrictOwnAudio: true } as MediaTrackConstraints),
+          // "Som do sistema" é a mistura de TUDO que toca no Windows (Discord, chamadas...). Só é oferecido
+          // quando a pessoa escolhe esse modo; no padrão, o navegador oferece apenas o som da aba.
+          systemAudio: opts.audio === 'system' ? 'include' : 'exclude',
+          // Não oferecer a própria aba do Telão no seletor.
+          selfBrowserSurface: 'exclude',
         } as DisplayMediaStreamOptions);
       }
     } catch (e) {
@@ -666,7 +676,34 @@ export class RoomSession {
     track.addEventListener('ended', () => void this.stopBroadcast('A captura foi encerrada pelo navegador ("Parar de compartilhar").'));
     this.live = { stream, opts, stopSynthetic };
     const st = track.getSettings() as MediaTrackSettings & { displaySurface?: string };
-    const noAudio = opts.audio && stream.getAudioTracks().length === 0;
+    const surface = st.displaySurface ?? null; // browser = aba · window = janela · monitor = tela inteira
+    // No modo "só a aba", nunca enviar áudio que não seja de uma aba (garantia extra além do systemAudio).
+    if (!opts.synthetic && opts.audio === 'tab' && surface && surface !== 'browser') {
+      for (const a of stream.getAudioTracks()) {
+        a.stop();
+        stream.removeTrack(a);
+      }
+    }
+    const hasAudio = stream.getAudioTracks().length > 0;
+    let audioNotice: string | null = null;
+    if (!opts.synthetic && opts.audio !== 'off') {
+      if (hasAudio && surface !== 'browser') {
+        audioNotice =
+          'Enviando o som do PC inteiro: vai junto tudo que toca no seu computador, inclusive Discord e chamadas. ' +
+          'Para mandar só o som de um site, compartilhe uma ABA. Para tirar o Discord, coloque a saída de voz dele em outro ' +
+          'dispositivo (ex.: o fone) diferente do padrão do Windows.';
+      } else if (!hasAudio && opts.audio === 'system') {
+        audioNotice =
+          'Transmitindo sem áudio: no seletor, marque "Compartilhar áudio do sistema" (tela inteira) ou ' +
+          '"Compartilhar áudio da guia" (aba).';
+      } else if (!hasAudio && surface && surface !== 'browser') {
+        audioNotice =
+          'Transmitindo sem áudio: janelas e a tela inteira não enviam só o próprio som. Para ter som, compartilhe uma ABA ' +
+          '(com "Compartilhar áudio da guia" marcado).';
+      } else if (!hasAudio) {
+        audioNotice = 'Transmitindo sem áudio: no seletor, marque "Compartilhar áudio da guia" para o som ir junto.';
+      }
+    }
     this.update({
       localStream: stream,
       capture: {
@@ -677,13 +714,7 @@ export class RoomSession {
       },
     });
     const ok = await this.publish();
-    if (ok && noAudio) {
-      this.update({
-        notice:
-          'Transmitindo sem áudio: a fonte escolhida não tem som. No Windows, o som só vai junto ao compartilhar a TELA INTEIRA ' +
-          '(marcando "Compartilhar áudio do sistema") ou uma ABA (marcando "Compartilhar áudio da guia"). Janelas não enviam áudio.',
-      });
-    }
+    if (ok && audioNotice) this.update({ notice: audioNotice });
   }
 
   /** Envia a captura atual ao servidor (também usada para retomar após reconexão). */

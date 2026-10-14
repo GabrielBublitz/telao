@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CAPPED_MAX_KBPS, type BroadcastOptions, type RoomSession, type Snapshot } from '@/lib/session';
+import { CAPPED_MAX_KBPS, type AudioMode, type BroadcastOptions, type RoomSession, type Snapshot } from '@/lib/session';
 
 // v2: o padrão passou a ser 720p; a chave nova descarta preferências antigas salvas em 1080p.
 const OPTS_KEY = 'telao:broadcast:v2';
@@ -34,10 +34,14 @@ function loadOpts(): Omit<BroadcastOptions, 'synthetic'> {
     bitrateKbps: RECOMMENDED[720],
     simulcast: true,
     contentHint: 'detail' as const,
-    audio: true,
+    audio: 'tab' as AudioMode,
   };
   try {
-    return { ...base, ...JSON.parse(localStorage.getItem(OPTS_KEY) ?? '{}') };
+    const saved = JSON.parse(localStorage.getItem(OPTS_KEY) ?? '{}');
+    // Versões antigas guardavam o áudio como liga/desliga: ligado vira "só a aba" (o modo seguro).
+    if (typeof saved.audio === 'boolean') saved.audio = saved.audio ? 'tab' : 'off';
+    if (!['tab', 'system', 'off'].includes(saved.audio)) delete saved.audio;
+    return { ...base, ...saved };
   } catch {
     return base;
   }
@@ -192,19 +196,26 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
             </select>
           </label>
 
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={opts.audio}
+          <label className="field">
+            Áudio
+            <select
+              value={opts.audio}
               disabled={s.broadcasting}
-              onChange={(e) => setOpts({ ...opts, audio: e.target.checked })}
+              onChange={(e) => setOpts({ ...opts, audio: e.target.value as AudioMode })}
               data-testid="audio"
-            />
-            <span>
-              Compartilhar áudio (som do PC ou da aba). No seletor do navegador, marque <b>“Compartilhar áudio”</b>. No Windows funciona com
-              a tela inteira ou uma aba; janelas avulsas não enviam som.
-            </span>
+            >
+              <option value="tab">Só o som da aba (recomendado)</option>
+              <option value="system">Som do PC inteiro (inclui Discord e chamadas)</option>
+              <option value="off">Sem áudio</option>
+            </select>
           </label>
+          <p className="muted small" style={{ margin: 0 }}>
+            {opts.audio === 'system'
+              ? 'Vai junto tudo que toca no computador, inclusive a call do Discord. Para evitar, ponha a saída de voz do Discord em outro dispositivo (ex.: o fone).'
+              : opts.audio === 'tab'
+                ? 'Para ter som, compartilhe uma ABA do navegador e marque “Compartilhar áudio da guia”. Janelas e a tela inteira vão sem som.'
+                : 'A transmissão vai só com imagem.'}
+          </p>
         </div>
       </dialog>
     </section>

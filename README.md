@@ -43,9 +43,15 @@ Qualquer pessoa na sala pode transmitir a tela (tela inteira, janela ou aba), **
 - **Com mais de 2 transmissões ao vivo** (`MAX_1080P_BROADCASTERS`), o servidor limita **todas** a 720p e 2,5 Mbps, e todo mundo vê o aviso. O limite sai sozinho quando sobram 2 ou menos.
 
 ### Áudio
-- A opção **Compartilhar áudio** (ligada por padrão) envia o som junto com a tela, em Opus estéreo a até 128 kbps, sem o processamento de voz que estragaria música e jogos.
-- No seletor do navegador, marque **"Compartilhar áudio do sistema"** (tela inteira, no Windows) ou **"Compartilhar áudio da guia"** (aba). **Janelas avulsas não enviam som:** a interface avisa quando a fonte escolhida veio sem áudio.
-- **Cuidado com eco:** se você compartilhar a tela inteira com áudio do sistema e estiver ouvindo outra transmissão na sala, o som dela também vai junto. Use fones ou silencie o quadro (🔇).
+Na engrenagem (⚙), em **Áudio**:
+- **Só o som da aba** (padrão): vai só o som da aba compartilhada. Compartilhe uma **aba** e marque "Compartilhar áudio da guia". **Janelas e a tela inteira vão sem som**, porque o navegador não captura o som só de uma janela.
+- **Som do PC inteiro:** é a mistura de tudo que toca no Windows, **inclusive a call do Discord**. O navegador não consegue tirar um programa específico dessa mistura. Para tirar o Discord, coloque a saída de voz dele em outro dispositivo (ex.: o fone), diferente do dispositivo padrão do Windows.
+- **Sem áudio.**
+
+Outros detalhes:
+- O som da própria aba do Telão (outras transmissões que você está assistindo) é excluído da captura, nos navegadores que suportam isso.
+- O áudio vai em Opus estéreo, a até 128 kbps, sem processamento de voz.
+- A interface avisa quando a transmissão saiu sem som ou com o som do PC inteiro.
 - Quem assiste ouve pelo próprio quadro, com mudo e volume. Se o navegador bloquear o som automático, aparece o botão **"🔊 Clique para ouvir"**.
 
 ### Qualidade

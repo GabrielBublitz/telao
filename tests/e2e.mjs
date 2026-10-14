@@ -71,7 +71,7 @@ async function joinPage(browser, url, nickname) {
     bitrateKbps: Number(a.bitrate),
     simulcast: true, // a camada reserva é sempre ligada
     contentHint: 'detail',
-    audio: a.audio,
+    audio: a.audio ? 'tab' : 'off',
   });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`  [${nickname}] erro na página: ${e.message}`));
