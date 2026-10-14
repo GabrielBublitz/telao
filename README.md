@@ -404,7 +404,17 @@ Rodar o Node nativamente é mais simples e mais confiável aqui: o worker do med
 
 ---
 
-## 15. Estrutura de pastas
+## 15. Dados sensíveis e o git
+
+O README e os guias citam IPs e o endereço do túnel desta instalação. Para que **nada disso vá para o repositório**, um filtro do git troca esses valores por marcadores ao commitar, como `<SEU_IP_PUBLICO>`, `<IP_LOCAL_DO_PC>`, `<IP_DO_ROTEADOR>`, `<ENDERECO_DO_TUNEL_PLAYIT>`, `<IP_DO_TUNEL_PLAYIT>` e `<PORTA_DO_TUNEL_PLAYIT>`. No seu PC, os arquivos continuam com os valores reais.
+
+- **Valores reais:** ficam em `.sensitive.local`, na raiz, fora do git. Uma linha por item, no formato `valor real = <MARCADOR>`.
+- **Ativar** (uma vez por clone): `powershell -ExecutionPolicy Bypass -File scripts\setup-git-filter.ps1`
+- **Quem clonar sem o `.sensitive.local`** vê os marcadores e preenche com os próprios dados.
+- **Como funciona:** o filtro está em `scripts/git-sensitive-filter.mjs` e é aplicado pelo `.gitattributes`. Imagens não passam por ele, então capturas de tela nunca devem mostrar IPs reais.
+- **Configuração de verdade** (`server/.env`) e salas (`server/.data/`) já ficam fora do git pelo `.gitignore`.
+
+## 16. Estrutura de pastas
 
 ```
 telao/

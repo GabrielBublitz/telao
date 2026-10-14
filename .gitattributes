@@ -1,0 +1,18 @@
+# Dados sensíveis (IPs, endereço do túnel) viram marcadores no repositório.
+# Filtro em scripts/git-sensitive-filter.mjs; valores reais em .sensitive.local (fora do git).
+# Ative uma vez por clone: powershell -ExecutionPolicy Bypass -File scripts\setup-git-filter.ps1
+*.md       filter=sensitive
+*.html     filter=sensitive
+*.js       filter=sensitive
+*.mjs      filter=sensitive
+*.ts       filter=sensitive
+*.tsx      filter=sensitive
+*.css      filter=sensitive
+*.json     filter=sensitive
+*.ps1      filter=sensitive
+*.cmd      filter=sensitive
+*.cs       filter=sensitive
+*.example  filter=sensitive
+# Binários nunca passam pelo filtro.
+*.png      -filter binary
+*.ico      -filter binary
