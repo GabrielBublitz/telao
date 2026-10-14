@@ -56,6 +56,21 @@ function StreamTile({ tile }: { tile: Tile }) {
     });
   }, [tile.stream, audible]);
 
+  // O navegador pausa vídeos de abas em segundo plano; ao voltar para a aba (ou se pausar sozinho), retoma.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const resume = () => {
+      if (!document.hidden && v.paused && v.srcObject) v.play().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', resume);
+    v.addEventListener('pause', resume);
+    return () => {
+      document.removeEventListener('visibilitychange', resume);
+      v.removeEventListener('pause', resume);
+    };
+  }, [tile.stream]);
+
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = volume;
   }, [volume]);

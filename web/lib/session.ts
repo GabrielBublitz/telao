@@ -185,6 +185,10 @@ export class RoomSession {
   private appliedEncoding = '';
   private syncing = false;
   private syncQueued = false;
+  private syncRetries = 0;
+  /** Progresso de cada vídeo recebido (quadros decodificados), para detectar imagem parada. */
+  private progress = new Map<string, { frames: number; since: number; askedKeyFrame: boolean }>();
+  private healthTimer: ReturnType<typeof setInterval> | null = null;
   private closed = false;
   private retries = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -249,6 +253,7 @@ export class RoomSession {
     this.iceServers = res.iceServers;
     this.retries = 0;
     this.update({ phase: 'joined', peerId: res.peerId, roomName: res.roomName, bitrate: res.bitrate, error: null, notice: null });
+    if (!this.healthTimer) this.healthTimer = setInterval(() => void this.healthCheck(), 3_000);
     // Voltou depois de uma queda com a captura ainda ativa: retoma a transmissão automaticamente.
     if (this.live) await this.publish();
     this.applyRoomState(res.state);
@@ -429,6 +434,11 @@ export class RoomSession {
   }
 
   private async ensureRecvTransport() {
+    // Transporte que falhou (rede caiu e voltou) não recebe mais nada: descarta e cria outro.
+    if (this.recvTransport && !this.recvTransport.closed && this.recvTransport.connectionState === 'failed') {
+      for (const pid of [...this.consumers.keys()]) this.dropConsumerFor(pid);
+      this.recvTransport.close();
+    }
     if (!this.recvTransport || this.recvTransport.closed) this.recvTransport = await this.createTransport('recv');
     return this.recvTransport;
   }
@@ -468,35 +478,108 @@ export class RoomSession {
           if (b.audioProducerId) desired.add(b.audioProducerId);
         }
         const toClose = [...this.consumers.keys()].filter((pid) => !desired.has(pid));
-        for (const pid of toClose) {
-          this.consumers.get(pid)?.close();
-          this.consumers.delete(pid);
-        }
+        for (const pid of toClose) this.dropConsumerFor(pid);
         if (toClose.length) await this.req('stopWatching', { producerIds: toClose }).catch(() => {});
+        // Cada transmissão é aberta separadamente: uma falha (ex.: atraso pelo túnel) não trava as outras
+        // e é tentada de novo logo em seguida, em vez de esperar o próximo evento da sala.
+        let failed: unknown = null;
         for (const pid of desired) {
           if (this.consumers.has(pid)) continue;
-          const transport = await this.ensureRecvTransport();
-          const data = await this.req<ConsumeResponse>('consume', {
-            transportId: transport.id,
-            producerId: pid,
-            rtpCapabilities: this.device.recvRtpCapabilities,
-          });
-          const consumer = await transport.consume({
-            id: data.id,
-            producerId: data.producerId,
-            kind: data.kind,
-            rtpParameters: data.rtpParameters,
-          });
-          this.consumers.set(pid, consumer);
-          this.layerCounts.set(consumer.id, data.layerCount);
-          await this.req('resumeConsumer', { consumerId: consumer.id });
+          try {
+            await this.openConsumer(pid);
+          } catch (e) {
+            failed = e;
+          }
         }
         this.rebuildWatched();
+        if (failed) {
+          const stillWanted = (this.snapshot.room?.broadcasters ?? []).some((b) => this.wanted.includes(b.peerId));
+          if (stillWanted && this.syncRetries++ < 5) setTimeout(() => void this.syncConsumers(), 1500);
+          else if (stillWanted) this.update({ error: `Não foi possível receber a transmissão: ${errText(failed)}` });
+        } else {
+          this.syncRetries = 0;
+        }
       } while (this.syncQueued);
-    } catch (e) {
-      if (this.snapshot.room?.broadcasters.length) this.update({ error: `Não foi possível receber a transmissão: ${errText(e)}` });
     } finally {
       this.syncing = false;
+    }
+  }
+
+  private async openConsumer(pid: string) {
+    const transport = await this.ensureRecvTransport();
+    const data = await this.req<ConsumeResponse>('consume', {
+      transportId: transport.id,
+      producerId: pid,
+      rtpCapabilities: this.device!.recvRtpCapabilities,
+    });
+    const consumer = await transport.consume({
+      id: data.id,
+      producerId: data.producerId,
+      kind: data.kind,
+      rtpParameters: data.rtpParameters,
+    });
+    this.consumers.set(pid, consumer);
+    this.layerCounts.set(consumer.id, data.layerCount);
+    await this.req('resumeConsumer', { consumerId: consumer.id });
+  }
+
+  private dropConsumerFor(pid: string) {
+    const c = this.consumers.get(pid);
+    if (c) {
+      this.progress.delete(c.id);
+      c.close();
+    }
+    this.consumers.delete(pid);
+  }
+
+  /**
+   * Rede de segurança a cada 3 s: reconfere a sala (caso algum aviso tenha se perdido) e vigia cada vídeo
+   * recebido. Se os quadros pararem, pede um quadro completo; se nunca chegou imagem nenhuma, reabre.
+   */
+  private async healthCheck() {
+    if (this.closed || this.snapshot.phase !== 'joined' || !this.device) return;
+    if (this.recvTransport && !this.recvTransport.closed && this.recvTransport.connectionState === 'failed') {
+      // A recepção caiu: descarta tudo; a sincronização abaixo cria um transporte novo.
+      for (const pid of [...this.consumers.keys()]) this.dropConsumerFor(pid);
+      this.recvTransport.close();
+    }
+    const room = this.snapshot.room;
+    if (room) {
+      this.reconcileWanted(room);
+      void this.syncConsumers();
+    }
+    const now = Date.now();
+    // Com a aba escondida o navegador pode parar de decodificar de propósito: não é imagem travada.
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.progress.clear();
+      return;
+    }
+    for (const [pid, c] of [...this.consumers]) {
+      if (c.kind !== 'video' || c.closed) continue;
+      let frames = 0;
+      try {
+        (await c.getStats()).forEach((s: { type?: string; kind?: string; framesDecoded?: number }) => {
+          if (s.type === 'inbound-rtp' && s.kind === 'video') frames = s.framesDecoded ?? 0;
+        });
+      } catch {
+        continue;
+      }
+      const p = this.progress.get(c.id);
+      if (!p || frames > p.frames) {
+        this.progress.set(c.id, { frames, since: now, askedKeyFrame: false });
+        continue;
+      }
+      const stalled = now - p.since;
+      if (stalled > 5_000 && !p.askedKeyFrame) {
+        p.askedKeyFrame = true;
+        void this.req('requestKeyFrame', { consumerId: c.id }).catch(() => {});
+      } else if (stalled > 8_000 && p.frames === 0) {
+        // Nunca chegou nenhum quadro (a transmissão "não apareceu"): fecha e abre de novo.
+        // Tela parada depois de já ter mostrado imagem é normal (sem movimento, poucos quadros) e não reabre.
+        this.dropConsumerFor(pid);
+        await this.req('stopWatching', { producerIds: [pid] }).catch(() => {});
+        void this.syncConsumers();
+      }
     }
   }
 
@@ -735,6 +818,7 @@ export class RoomSession {
     this.producer = null;
     for (const c of this.consumers.values()) c.close();
     this.consumers.clear();
+    this.progress.clear();
     this.sendTransport?.close();
     this.sendTransport = null;
     this.recvTransport?.close();
@@ -755,6 +839,7 @@ export class RoomSession {
   close() {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.healthTimer) clearInterval(this.healthTimer);
     this.cleanupMedia({ keepCapture: false });
     this.signaling?.close();
     this.signaling = null;
