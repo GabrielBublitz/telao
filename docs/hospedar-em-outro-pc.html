@@ -1,0 +1,300 @@
+<title>Telão no notebook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: coluna de leitura (~860px); passo a passo como linha do tempo vertical, com selo de "onde fazer".
+   Mesmo visual do app e da visão geral (grafite, azul de ação). */
+:root {
+  --bg: #0b0d10;
+  --surface: #13171d;
+  --surface-2: #0f1217;
+  --line: #242a33;
+  --fg: #e8ebf0;
+  --muted: #8b94a3;
+  --accent: #5b8cff;
+  --accent-soft: rgba(91, 140, 255, 0.14);
+  --pc: #c79bff;
+  --pc-soft: rgba(199, 155, 255, 0.14);
+  --nb: #3ecf8e;
+  --nb-soft: rgba(62, 207, 142, 0.14);
+  --web: #f5b84c;
+  --web-soft: rgba(245, 184, 76, 0.14);
+  --bad: #ff6b6b;
+  --font-display: 'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f4f5f8; --surface: #ffffff; --surface-2: #eef0f4; --line: #dde1e8; --fg: #151820; --muted: #5b6475;
+    --accent: #3a68e8; --accent-soft: rgba(58, 104, 232, 0.10);
+    --pc: #8a4fd8; --pc-soft: rgba(138, 79, 216, 0.10); --nb: #12965f; --nb-soft: rgba(18, 150, 95, 0.10);
+    --web: #a86d00; --web-soft: rgba(168, 109, 0, 0.10); --bad: #d63a3a;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f4f5f8; --surface: #ffffff; --surface-2: #eef0f4; --line: #dde1e8; --fg: #151820; --muted: #5b6475;
+  --accent: #3a68e8; --accent-soft: rgba(58, 104, 232, 0.10);
+  --pc: #8a4fd8; --pc-soft: rgba(138, 79, 216, 0.10); --nb: #12965f; --nb-soft: rgba(18, 150, 95, 0.10);
+  --web: #a86d00; --web-soft: rgba(168, 109, 0, 0.10); --bad: #d63a3a;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--font-body); margin: 0; }
+.wrap { max-width: 880px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5.5vw, 44px); letter-spacing: -0.02em; }
+h2 { font-size: 24px; letter-spacing: -0.01em; }
+h3 { font-size: 17px; }
+p { margin: 0; }
+section { display: flex; flex-direction: column; gap: 18px; }
+.eyebrow { font: 600 12px/1 var(--font-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.lead { color: var(--muted); max-width: 62ch; font-size: 17px; }
+svg.i { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+code { font: 500 13.5px var(--font-mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; overflow-wrap: anywhere; }
+b { font-weight: 600; }
+
+/* Topo: de → para */
+.hero { display: flex; flex-direction: column; gap: 16px; }
+.move { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.machine { display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.machine svg.i { width: 26px; height: 26px; }
+.machine small { display: block; color: var(--muted); font-size: 13px; line-height: 1.2; }
+.machine.pc { color: var(--pc); } .machine.nb { color: var(--nb); }
+.machine span { color: var(--fg); font-weight: 600; line-height: 1.25; }
+.arrow { color: var(--muted); }
+
+/* Antes de começar */
+.checklist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.check { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.check svg.i { color: var(--nb); margin-top: 2px; }
+.check p { font-size: 15px; }
+@media (max-width: 560px) { .checklist { grid-template-columns: minmax(0, 1fr); } }
+
+/* Onde fazer */
+.where { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font: 600 12px/1.4 var(--font-body); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.where svg.i { width: 14px; height: 14px; }
+.where.pc { background: var(--pc-soft); color: var(--pc); }
+.where.nb { background: var(--nb-soft); color: var(--nb); }
+.where.web { background: var(--web-soft); color: var(--web); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Linha do tempo (sequência real, por isso numerada) */
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.step { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; }
+.rail { display: flex; flex-direction: column; align-items: center; }
+.num { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font: 700 17px var(--font-display); background: var(--accent); color: #fff; flex: none; }
+.rail::after { content: ''; flex: 1; width: 2px; background: var(--line); margin-block: 6px; }
+.step:last-child .rail::after { display: none; }
+.body { padding-bottom: 28px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.body-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 44px; }
+.body p { color: var(--muted); }
+.body p b, .body li b { color: var(--fg); }
+.body ul { margin: 0; padding-left: 20px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.box { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; font-size: 15px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-weight: 600; }
+.note { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; color: var(--muted); }
+.note svg.i { color: var(--web); margin-top: 3px; width: 18px; height: 18px; }
+
+/* Alternativa */
+.alt { border: 1px dashed var(--line); border-radius: 14px; padding: 16px 18px; background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; }
+.alt p { color: var(--muted); font-size: 15px; }
+
+/* Dicas */
+.tips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tip { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
+.tip .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.tip p { color: var(--muted); font-size: 14.5px; }
+@media (max-width: 720px) { .tips { grid-template-columns: minmax(0, 1fr); } }
+
+/* Problemas */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 15px; }
+th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); }
+td { background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td .bad { color: var(--bad); }
+
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 20px; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="desktop" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></symbol>
+  <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.5v.5"/></symbol>
+  <symbol id="cable" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="7" rx="1.5"/><path d="M10 10v3h4v-3M12 13v8"/></symbol>
+  <symbol id="plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></symbol>
+  <symbol id="moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="back" viewBox="0 0 24 24"><path d="M20 12H5M11 6l-6 6 6 6"/></symbol>
+</svg>
+
+<main class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">Guia passo a passo</span>
+    <h1>Hospedar o Telão no notebook</h1>
+    <p class="lead">Leve o servidor do PC para outro computador da mesma rede Wi-Fi. Os amigos continuam usando o navegador do mesmo jeito; só muda qual máquina fica ligada.</p>
+    <div class="move" aria-label="Do PC atual para o notebook">
+      <span class="machine pc"><svg class="i"><use href="#desktop"/></svg><span>PC atual<small>&lt;IP_LOCAL_DO_PC&gt;</small></span></span>
+      <svg class="i arrow"><use href="#arrow"/></svg>
+      <span class="machine nb"><svg class="i"><use href="#laptop"/></svg><span>Notebook<small>mesma rede</small></span></span>
+    </div>
+  </header>
+
+  <section aria-labelledby="antes">
+    <span class="eyebrow">Antes de começar</span>
+    <h2 id="antes">O que o notebook precisa</h2>
+    <div class="checklist">
+      <div class="check"><svg class="i"><use href="#check"/></svg><p><b>Windows 10 ou 11, 64 bits.</b> Não precisa instalar Node: ele vai dentro do pacote.</p></div>
+      <div class="check"><svg class="i"><use href="#check"/></svg><p><b>Conectado na mesma rede</b> que o PC (Wi-Fi ou cabo).</p></div>
+      <div class="check"><svg class="i"><use href="#check"/></svg><p><b>Acesso à sua conta do playit.gg</b>, a mesma onde está o túnel <code>&lt;ENDERECO_DO_TUNEL_PLAYIT&gt;</code>.</p></div>
+      <div class="check"><svg class="i"><use href="#check"/></svg><p><b>~250 MB livres</b> para o pacote extraído.</p></div>
+    </div>
+    <div class="legend" aria-label="Onde cada passo é feito">
+      <span class="where pc"><svg class="i"><use href="#desktop"/></svg>No PC</span>
+      <span class="where nb"><svg class="i"><use href="#laptop"/></svg>No notebook</span>
+      <span class="where web"><svg class="i"><use href="#globe"/></svg>No site do playit</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="passos">
+    <span class="eyebrow">Passo a passo</span>
+    <h2 id="passos">8 passos, uns 15 minutos</h2>
+    <ol class="timeline">
+
+      <li class="step">
+        <div class="rail"><span class="num">1</span></div>
+        <div class="body">
+          <div class="body-head"><h3>Feche o Telão no PC</h3><span class="where pc"><svg class="i"><use href="#desktop"/></svg>PC</span></div>
+          <p>Feche a janela do <b>Telao.exe</b>. Só uma máquina pode ser o servidor por vez: o túnel do vídeo aponta para um computador só.</p>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="rail"><span class="num">2</span></div>
+        <div class="body">
+          <div class="body-head"><h3>Pegue o pacote</h3><span class="where pc"><svg class="i"><use href="#desktop"/></svg>PC</span></div>
+          <p>O pacote já está pronto em <code>telao\dist\Telao-portatil.zip</code> (<b>57 MB</b>). Ele traz o Telao.exe, o Node, o túnel e a configuração do playit.</p>
+          <p>Se mudar algo no app depois, gere de novo com <code>scripts\empacotar.ps1</code>.</p>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="rail"><span class="num">3</span></div>
+        <div class="body">
+          <div class="body-head"><h3>Copie e extraia em <code>C:\Telao</code></h3><span class="where nb"><svg class="i"><use href="#laptop"/></svg>Notebook</span></div>
+          <p>Leve o zip por pendrive, Google Drive/OneDrive ou pasta compartilhada. Clique com o botão direito → <b>Extrair tudo…</b> e escolha <code>C:\</code>. O resultado deve ser a pasta <code>C:\Telao</code>, com o Telao.exe dentro.</p>
+          <div class="note"><svg class="i"><use href="#alert"/></svg><span>Use um caminho curto como <code>C:\Telao</code>. Em pastas com caminho longo (Downloads dentro de várias subpastas), o Windows corta arquivos que passam de 260 caracteres e o Telão não liga.</span></div>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="rail"><span class="num">4</span></div>
+        <div class="body">
+          <div class="body-head"><h3>Descubra o IP do notebook</h3><span class="where nb"><svg class="i"><use href="#laptop"/></svg>Notebook</span></div>
+          <p>Abra o <b>Prompt de Comando</b>, digite <code>ipconfig</code> e procure <b>Endereço IPv4</b> na conexão Wi-Fi (ou Ethernet). Vai ser algo como <code>192.168.0.57</code>.</p>
+          <p>Recomendado: no roteador (<code>&lt;IP_DO_ROTEADOR&gt;</code>), reserve esse IP para o notebook (DHCP estático). Assim ele não muda e o túnel continua certo.</p>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="rail"><span class="num">5</span></div>
+        <div class="body">
+          <div class="body-head"><h3>Instale o playit no notebook</h3><span class="where nb"><svg class="i"><use href="#laptop"/></svg>Notebook</span></div>
+          <p>Baixe em <b>playit.gg/download</b>, instale e, quando ele pedir, vincule o programa à <b>sua conta</b>. Ele vira um novo "agente" na sua conta.</p>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="rail"><span class="num">6</span></div>
+        <div class="body">
+          <div class="body-head"><h3>Aponte o túnel para o notebook</h3><span class="where web"><svg class="i"><use href="#globe"/></svg>Site do playit</span></div>
+          <p>Em <b>playit.gg/account/tunnels</b>, abra o túnel <code>&lt;ENDERECO_DO_TUNEL_PLAYIT&gt;:&lt;PORTA_DO_TUNEL_PLAYIT&gt;</code> e ajuste:</p>
+          <div class="box">
+            <dl class="kv">
+              <dt>Agente</dt><dd>o do notebook</dd>
+              <dt>Local IP</dt><dd>o IP do passo 4 (ex.: 192.168.0.57)</dd>
+              <dt>Local Port</dt><dd>&lt;PORTA_DO_TUNEL_PLAYIT&gt; (não muda)</dd>
+              <dt>Proxy Protocol</dt><dd>None</dd>
+            </dl>
+          </div>
+          <p>O endereço público (<code>&lt;IP_DO_TUNEL_PLAYIT&gt;:&lt;PORTA_DO_TUNEL_PLAYIT&gt;</code>) continua o mesmo, então não precisa mexer na configuração do Telão.</p>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="rail"><span class="num">7</span></div>
+        <div class="body">
+          <div class="body-head"><h3>Abra o Telao.exe</h3><span class="where nb"><svg class="i"><use href="#laptop"/></svg>Notebook</span></div>
+          <p>Dê dois cliques em <code>C:\Telao\Telao.exe</code>. Na primeira vez, o Windows pergunta duas coisas:</p>
+          <ul>
+            <li><b>"O Windows protegeu o computador"</b> (o .exe não tem assinatura digital): clique em <b>Mais informações → Executar assim mesmo</b>.</li>
+            <li><b>Firewall do Windows</b> para o <b>node.exe</b>: marque <b>redes privadas e públicas</b> e clique em <b>Permitir</b>. Sem isso, o vídeo não passa.</li>
+          </ul>
+          <p>O painel <code>localhost:3002</code> abre sozinho. Crie a sala e mande o link para os amigos.</p>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="rail"><span class="num">8</span></div>
+        <div class="body">
+          <div class="body-head"><h3>Teste com o celular no 4G</h3><span class="where web"><svg class="i"><use href="#globe"/></svg>Celular</span></div>
+          <p>Com o Wi-Fi do celular <b>desligado</b>, abra o link e transmita algo do notebook. Em "Qualidade" deve aparecer o vídeo chegando. Para conferir o caminho, olhe no painel de quem transmite: <code>UDP · direta (NAT) → &lt;IP_DO_TUNEL_PLAYIT&gt;:&lt;PORTA_DO_TUNEL_PLAYIT&gt;</code>.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="alt">
+      <h3>Alternativa sem instalar o playit no notebook</h3>
+      <p>Deixe o <b>PC ligado com o playit</b> e, no passo 6, troque só o <b>Local IP</b> para o IP do notebook, mantendo o agente do PC. O playit do PC repassa o vídeo pela rede de casa até o notebook. É mais rápido de configurar, mas o PC precisa ficar ligado.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="dicas">
+    <span class="eyebrow">Dicas</span>
+    <h2 id="dicas">Para não travar</h2>
+    <div class="tips">
+      <div class="tip"><span class="ic"><svg class="i"><use href="#cable"/></svg></span><h3>Cabo &gt; Wi-Fi</h3><p>Todo o vídeo sai pelo upload do notebook. No cabo de rede ele é bem mais estável que no Wi-Fi.</p></div>
+      <div class="tip"><span class="ic"><svg class="i"><use href="#plug"/></svg></span><h3>Na tomada</h3><p>Na bateria, o Windows pode reduzir o desempenho e derrubar o FPS.</p></div>
+      <div class="tip"><span class="ic"><svg class="i"><use href="#moon"/></svg></span><h3>Sem suspender</h3><p>Em Configurações → Energia, desative a suspensão e escolha "não fazer nada" ao fechar a tampa.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="problemas">
+    <span class="eyebrow">Se algo der errado</span>
+    <h2 id="problemas">Problemas comuns</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>O que aparece</th><th>Causa provável</th><th>O que fazer</th></tr></thead>
+        <tbody>
+          <tr><td><span class="bad">Falha na mídia</span></td><td>Túnel apontando para outro IP ou outro agente; firewall bloqueando o node.exe.</td><td>Confira o passo 6 (Local IP = IP do notebook) e o passo 7 (Permitir no firewall).</td></tr>
+          <tr><td>Link não abre</td><td>Telao.exe fechado, ou link de uma execução anterior.</td><td>Deixe a janela aberta e pegue o link novo no painel.</td></tr>
+          <tr><td>"Arquivo necessário não encontrado"</td><td>Extração incompleta (caminho longo demais).</td><td>Extraia de novo em <code>C:\Telao</code>.</td></tr>
+          <tr><td>Erro de DLL faltando ao abrir</td><td>Windows sem o runtime do Visual C++.</td><td>Instale o "Microsoft Visual C++ Redistributable x64" pelo site da Microsoft e abra de novo.</td></tr>
+          <tr><td>Painel não abre em outro PC</td><td>É de propósito: o painel só funciona no próprio notebook.</td><td>Abra <code>localhost:3002</code> no notebook.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="voltar">
+    <span class="eyebrow">Mudou de ideia?</span>
+    <h2 id="voltar">Voltar para o PC</h2>
+    <p class="lead" style="color:var(--fg)">Feche o Telao.exe no notebook e, no site do playit, aponte o túnel de volta: <b>agente do PC</b> e <b>Local IP &lt;IP_LOCAL_DO_PC&gt;</b>. Depois abra o Telao.exe no PC.</p>
+  </section>
+
+  <footer>Telão · guia para hospedar em outro computador da rede · 14/10/2026.</footer>
+</main>

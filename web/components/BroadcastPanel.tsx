@@ -1,0 +1,212 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { CAPPED_MAX_KBPS, type BroadcastOptions, type RoomSession, type Snapshot } from '@/lib/session';
+
+// v2: o padrão passou a ser 720p; a chave nova descarta preferências antigas salvas em 1080p.
+const OPTS_KEY = 'telao:broadcast:v2';
+const BITRATES = [1500, 2500, 4000, 5000, 6000, 8000, 10000, 12000];
+// Bitrate sugerido ao trocar a resolução.
+const RECOMMENDED: Record<720 | 1080, number> = { 720: 2500, 1080: 5000 };
+
+function ScreenIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="4" width="20" height="13" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function loadOpts(): Omit<BroadcastOptions, 'synthetic'> {
+  const base = {
+    codec: 'vp8' as const,
+    resolution: 720 as 720 | 1080,
+    bitrateKbps: RECOMMENDED[720],
+    simulcast: true,
+    contentHint: 'detail' as const,
+    audio: true,
+  };
+  try {
+    return { ...base, ...JSON.parse(localStorage.getItem(OPTS_KEY) ?? '{}') };
+  } catch {
+    return base;
+  }
+}
+
+export default function BroadcastPanel({ session, snapshot: s, synthetic }: { session: RoomSession; snapshot: Snapshot; synthetic: boolean }) {
+  const maxKbps = s.bitrate?.maxKbps ?? 8000;
+  const [opts, setOpts] = useState(loadOpts);
+  const [canCapture, setCanCapture] = useState(true);
+  const settingsRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    setCanCapture(synthetic || !!navigator.mediaDevices?.getDisplayMedia);
+  }, [synthetic]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(OPTS_KEY, JSON.stringify(opts));
+    } catch {
+      // ignora: armazenamento indisponível
+    }
+  }, [opts]);
+
+  const room = s.room;
+  const full = !!room && !s.broadcasting && room.broadcasters.length >= room.maxBroadcasters;
+  const bitrate = Math.min(opts.bitrateKbps, maxKbps);
+  // Contando a minha, passaria do limite do servidor? Então todas (inclusive a minha) vão a 720p.
+  const wouldBeCapped = !!room && !s.broadcasting && room.broadcasters.length + 1 > room.max1080pBroadcasters;
+
+  return (
+    <section className="card stack">
+      <h2 className="section-title">Transmissão</h2>
+
+      {!canCapture && (
+        <div className="alert info">
+          Este navegador não permite compartilhar a tela (celulares não suportam). Você pode assistir normalmente.
+        </div>
+      )}
+
+      {/* Botão e resolução lado a lado */}
+      <div className="row" style={{ flexWrap: 'nowrap' }}>
+        {s.broadcasting ? (
+          <button className="danger" style={{ flex: 1 }} onClick={() => void session.stopBroadcast()} data-testid="stop">
+            ■ Encerrar
+          </button>
+        ) : (
+          <button
+            className="btn-icon"
+            style={{ flex: 1 }}
+            onClick={() => void session.startBroadcast({ ...opts, simulcast: true, bitrateKbps: bitrate, synthetic })}
+            disabled={!canCapture || s.phase !== 'joined' || s.starting || full}
+            data-testid="start"
+          >
+            <ScreenIcon />
+            {s.starting ? 'Escolhendo…' : 'Transmitir'}
+          </button>
+        )}
+        <select
+          aria-label="Resolução"
+          title="Resolução"
+          style={{ width: 'auto', flex: 'none' }}
+          value={opts.resolution}
+          disabled={s.broadcasting}
+          onChange={(e) => {
+            const resolution = Number(e.target.value) as 720 | 1080;
+            setOpts({ ...opts, resolution, bitrateKbps: RECOMMENDED[resolution] });
+          }}
+          data-testid="resolution"
+        >
+          <option value={1080}>1080p</option>
+          <option value={720}>720p</option>
+        </select>
+        <button
+          className="ghost icon-only"
+          onClick={() => settingsRef.current?.showModal()}
+          title="Configurações da transmissão"
+          aria-label="Configurações da transmissão"
+          data-testid="settings"
+        >
+          <GearIcon />
+        </button>
+      </div>
+      {s.broadcasting && (
+        <div className="muted small">{s.sendingAudio ? '🔊 Enviando áudio junto com a tela' : '🔇 Transmitindo sem áudio'}</div>
+      )}
+      {full && <div className="muted small">Limite de {room?.maxBroadcasters} transmissões simultâneas atingido.</div>}
+      {s.broadcasting && s.capped && (
+        <div className="alert warn small">
+          Sua transmissão está limitada a 720p e {CAPPED_MAX_KBPS / 1000} Mbps porque há mais de {room?.max1080pBroadcasters}{' '}
+          transmissões ao vivo. Volta ao normal quando alguém encerrar.
+        </div>
+      )}
+      {wouldBeCapped && (
+        <div className="muted small">
+          Com a sua, serão {(room?.broadcasters.length ?? 0) + 1} transmissões: todas ficarão limitadas a 720p.
+        </div>
+      )}
+
+      {/* Configurações avançadas num popup, como no Discord. Fecha com ✕, Esc ou clicando fora. */}
+      <dialog
+        ref={settingsRef}
+        className="modal"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) settingsRef.current?.close();
+        }}
+      >
+        <div className="stack" style={{ padding: 20 }}>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <h2 className="section-title" style={{ margin: 0 }}>
+              Configurações da transmissão
+            </h2>
+            <button className="ghost icon-only" onClick={() => settingsRef.current?.close()} aria-label="Fechar">
+              ✕
+            </button>
+          </div>
+          {s.broadcasting && <div className="muted small">Durante a transmissão só o bitrate pode ser alterado.</div>}
+          <label className="field">
+            Bitrate máximo
+            <select
+              value={bitrate}
+              onChange={(e) => {
+                const kbps = Number(e.target.value);
+                setOpts({ ...opts, bitrateKbps: kbps });
+                if (s.broadcasting) void session.setBitrate(kbps);
+              }}
+            >
+              {BITRATES.filter((b) => b <= maxKbps).map((b) => (
+                <option key={b} value={b}>
+                  {(b / 1000).toLocaleString('pt-BR')} Mbps{b === RECOMMENDED[opts.resolution] ? ' (recomendado)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            Prioridade
+            <select
+              value={opts.contentHint}
+              disabled={s.broadcasting}
+              onChange={(e) => setOpts({ ...opts, contentHint: e.target.value as 'detail' | 'motion' })}
+            >
+              <option value="detail">Nitidez — texto, código, slides</option>
+              <option value="motion">Fluidez — jogos, vídeos</option>
+            </select>
+          </label>
+
+          <label className="field">
+            Codec
+            <select value={opts.codec} disabled={s.broadcasting} onChange={(e) => setOpts({ ...opts, codec: e.target.value as 'vp8' | 'h264' })}>
+              <option value="vp8">VP8 (mais compatível)</option>
+              <option value="h264">H.264 (pode usar a GPU)</option>
+            </select>
+          </label>
+
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={opts.audio}
+              disabled={s.broadcasting}
+              onChange={(e) => setOpts({ ...opts, audio: e.target.checked })}
+              data-testid="audio"
+            />
+            <span>
+              Compartilhar áudio (som do PC ou da aba). No seletor do navegador, marque <b>“Compartilhar áudio”</b>. No Windows funciona com
+              a tela inteira ou uma aba; janelas avulsas não enviam som.
+            </span>
+          </label>
+        </div>
+      </dialog>
+    </section>
+  );
+}

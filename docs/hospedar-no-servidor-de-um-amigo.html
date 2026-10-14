@@ -1,0 +1,349 @@
+<title>Telão no PC do amigo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: coluna de leitura (~880px). Uma decisão no começo (caminho A ou B) e uma linha do tempo vertical
+   com selo de "quem faz". Mesmo visual do app. */
+:root {
+  --bg: #0b0d10;
+  --surface: #13171d;
+  --surface-2: #0f1217;
+  --line: #242a33;
+  --fg: #e8ebf0;
+  --muted: #8b94a3;
+  --accent: #5b8cff;
+  --accent-soft: rgba(91, 140, 255, 0.14);
+  --you: #c79bff;
+  --you-soft: rgba(199, 155, 255, 0.14);
+  --friend: #3ecf8e;
+  --friend-soft: rgba(62, 207, 142, 0.14);
+  --web: #f5b84c;
+  --web-soft: rgba(245, 184, 76, 0.14);
+  --bad: #ff6b6b;
+  --font-display: 'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f4f5f8; --surface: #ffffff; --surface-2: #eef0f4; --line: #dde1e8; --fg: #151820; --muted: #5b6475;
+    --accent: #3a68e8; --accent-soft: rgba(58, 104, 232, 0.10);
+    --you: #8a4fd8; --you-soft: rgba(138, 79, 216, 0.10); --friend: #12965f; --friend-soft: rgba(18, 150, 95, 0.10);
+    --web: #a86d00; --web-soft: rgba(168, 109, 0, 0.10); --bad: #d63a3a;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f4f5f8; --surface: #ffffff; --surface-2: #eef0f4; --line: #dde1e8; --fg: #151820; --muted: #5b6475;
+  --accent: #3a68e8; --accent-soft: rgba(58, 104, 232, 0.10);
+  --you: #8a4fd8; --you-soft: rgba(138, 79, 216, 0.10); --friend: #12965f; --friend-soft: rgba(18, 150, 95, 0.10);
+  --web: #a86d00; --web-soft: rgba(168, 109, 0, 0.10); --bad: #d63a3a;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--font-body); margin: 0; }
+.wrap { max-width: 880px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5.5vw, 44px); letter-spacing: -0.02em; }
+h2 { font-size: 24px; letter-spacing: -0.01em; }
+h3 { font-size: 17px; }
+p { margin: 0; }
+b { font-weight: 600; }
+section { display: flex; flex-direction: column; gap: 18px; }
+.eyebrow { font: 600 12px/1 var(--font-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.lead { color: var(--muted); max-width: 62ch; font-size: 17px; }
+svg.i { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+code { font: 500 13.5px var(--font-mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; overflow-wrap: anywhere; }
+
+/* Topo */
+.hero { display: flex; flex-direction: column; gap: 16px; }
+.move { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.machine { display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.machine svg.i { width: 26px; height: 26px; }
+.machine small { display: block; color: var(--muted); font-size: 13px; line-height: 1.2; font-weight: 400; }
+.machine span { color: var(--fg); font-weight: 600; line-height: 1.25; }
+.machine.you { color: var(--you); } .machine.friend { color: var(--friend); }
+.arrow { color: var(--muted); }
+
+/* Vantagens / checklist */
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.card { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.card svg.i { color: var(--friend); margin-top: 2px; }
+.card.plus svg.i { color: var(--accent); }
+.card p { font-size: 15px; color: var(--muted); }
+.card p b { color: var(--fg); }
+@media (max-width: 600px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* Quem faz */
+.who { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font: 600 12px/1.4 var(--font-body); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.who svg.i { width: 14px; height: 14px; }
+.who.you { background: var(--you-soft); color: var(--you); }
+.who.friend { background: var(--friend-soft); color: var(--friend); }
+.who.web { background: var(--web-soft); color: var(--web); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Decisão A/B */
+.decide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.path { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.path.best { border-color: var(--accent); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface); }
+.path-tag { display: inline-flex; align-items: center; gap: 8px; font: 700 13px var(--font-display); }
+.path-tag .letter { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--accent); color: #fff; }
+.path.alt .path-tag .letter { background: var(--line); color: var(--fg); }
+.path p, .path li { color: var(--muted); font-size: 15px; }
+.path ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.when { font-size: 14px; color: var(--fg); font-weight: 600; }
+@media (max-width: 640px) { .decide { grid-template-columns: minmax(0, 1fr); } }
+
+/* Trilha (sequência real, numerada) */
+.track-title { display: flex; align-items: center; gap: 10px; }
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.step { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; }
+.rail { display: flex; flex-direction: column; align-items: center; }
+.num { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font: 700 16px var(--font-display); background: var(--accent); color: #fff; flex: none; }
+.num.sub { background: var(--surface); border: 2px solid var(--accent); color: var(--accent); }
+.rail::after { content: ''; flex: 1; width: 2px; background: var(--line); margin-block: 6px; }
+.step:last-child .rail::after { display: none; }
+.body { padding-bottom: 28px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.body-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 44px; }
+.body p, .body li { color: var(--muted); }
+.body p b, .body li b { color: var(--fg); }
+.body ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.note { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; color: var(--muted); }
+.note svg.i { color: var(--web); margin-top: 3px; width: 18px; height: 18px; }
+
+/* Blocos de código com botão copiar */
+.code { position: relative; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.code pre { margin: 0; padding: 14px 16px; padding-right: 86px; overflow-x: auto; font: 500 13.5px/1.6 var(--font-mono); color: var(--fg); }
+.code .label { position: absolute; top: -10px; left: 12px; font: 600 11px var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; background: var(--bg); color: var(--muted); padding: 0 6px; }
+.copy { position: absolute; top: 8px; right: 8px; font: 600 12px var(--font-body); border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.copy:hover { border-color: var(--accent); }
+
+/* Tabela */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 15px; }
+th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); }
+td { background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; }
+.bad { color: var(--bad); }
+
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 20px; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="desktop" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+  <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.5v.5"/></symbol>
+  <symbol id="win" viewBox="0 0 24 24"><path d="M3 5.5l7.5-1v7H3zM12.5 4.2L21 3v8.5h-8.5zM3 13h7.5v7L3 19zM12.5 13H21v8l-8.5-1.2z"/></symbol>
+  <symbol id="term" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15H17"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16.5 6.5l2.5 2.5"/></symbol>
+</svg>
+
+<main class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">Guia passo a passo</span>
+    <h1>Hospedar o Telão no PC de um amigo</h1>
+    <p class="lead">O servidor sai da sua casa e vai para o PC com Windows do seu amigo, em outra rede. Você e os outros continuam entrando pelo link no navegador, inclusive para transmitir.</p>
+    <div class="move" aria-label="Do seu PC para o servidor do amigo">
+      <span class="machine you"><svg class="i"><use href="#desktop"/></svg><span>Seu PC<small>só transmite e assiste</small></span></span>
+      <svg class="i arrow"><use href="#arrow"/></svg>
+      <span class="machine friend"><svg class="i"><use href="#server"/></svg><span>PC do amigo<small>Windows · outra casa, outra internet</small></span></span>
+    </div>
+  </header>
+
+  <section aria-labelledby="porque">
+    <span class="eyebrow">Por que vale a pena</span>
+    <h2 id="porque">O que melhora</h2>
+    <div class="grid2">
+      <div class="card plus"><svg class="i"><use href="#plus"/></svg><p><b>O upload que conta passa a ser o dele.</b> Cada espectador recebe uma cópia do vídeo saindo do servidor. Da sua casa sai só a sua transmissão.</p></div>
+      <div class="card plus"><svg class="i"><use href="#plus"/></svg><p><b>Pode dispensar o playit.</b> Se a internet dele tiver IP público, o vídeo vai direto, sem o teto de ~3–5 Mbps do túnel grátis.</p></div>
+      <div class="card plus"><svg class="i"><use href="#plus"/></svg><p><b>Seu PC fica livre.</b> Não precisa deixar o Telao.exe aberto aí.</p></div>
+      <div class="card plus"><svg class="i"><use href="#plus"/></svg><p><b>Fica no ar quando quiserem.</b> Se o PC dele fica ligado direto, a sala está sempre disponível.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="combinar">
+    <span class="eyebrow">Antes de começar</span>
+    <h2 id="combinar">Combine com seu amigo</h2>
+    <div class="grid2">
+      <div class="card"><svg class="i"><use href="#check"/></svg><p><b>Windows 10/11 64 bits:</b> usa o pacote pronto (Telao.exe), sem instalar Node nem nada mais.</p></div>
+      <div class="card"><svg class="i"><use href="#check"/></svg><p><b>Upload da internet dele:</b> ~6 Mbps por pessoa assistindo em 1080p, ~3 Mbps em 720p. Peça para ele medir em fast.com.</p></div>
+      <div class="card"><svg class="i"><use href="#check"/></svg><p><b>Acesso ao roteador dele</b> (para liberar portas). Sem isso, ou com CGNAT, vamos de playit.</p></div>
+      <div class="card"><svg class="i"><use href="#check"/></svg><p><b>Quem cria as salas:</b> o painel só abre na máquina dele. Ou ele cria e te manda o link, ou você entra por acesso remoto (passo 8).</p></div>
+    </div>
+    <div class="legend" aria-label="Quem faz cada passo">
+      <span class="who you"><svg class="i"><use href="#desktop"/></svg>Você</span>
+      <span class="who friend"><svg class="i"><use href="#server"/></svg>Seu amigo, no PC dele</span>
+      <span class="who web"><svg class="i"><use href="#globe"/></svg>Site / roteador</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="caminho">
+    <span class="eyebrow">A decisão principal</span>
+    <h2 id="caminho">Por onde o vídeo vai chegar no servidor</h2>
+    <p class="lead">Depende de a internet do seu amigo ter IP público ou estar em CGNAT, como a sua. O passo 4 descobre isso.</p>
+    <div class="decide">
+      <div class="path best">
+        <span class="path-tag"><span class="letter">A</span>Porta direta no roteador</span>
+        <span class="when">Quando: a internet dele tem IP público</span>
+        <ul>
+          <li>Melhor qualidade: sem intermediário e sem teto de banda.</li>
+          <li>Precisa liberar <b>UDP e TCP 40000</b> no roteador dele.</li>
+          <li>Não usa playit.</li>
+        </ul>
+      </div>
+      <div class="path alt">
+        <span class="path-tag"><span class="letter">B</span>Túnel do playit</span>
+        <span class="when">Quando: CGNAT ou sem acesso ao roteador</span>
+        <ul>
+          <li>Funciona em qualquer rede, igual hoje na sua casa.</li>
+          <li>Mesmo teto de ~3–5 Mbps do plano grátis.</li>
+          <li>O playit é instalado no servidor dele.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="windows">
+    <span class="eyebrow">Passo a passo</span>
+    <div class="track-title"><svg class="i" style="width:26px;height:26px;color:var(--accent)"><use href="#win"/></svg><h2 id="windows">No PC do seu amigo</h2></div>
+    <ol class="timeline">
+
+      <li class="step"><div class="rail"><span class="num">1</span></div><div class="body">
+        <div class="body-head"><h3>Desligue o Telão no seu PC</h3><span class="who you"><svg class="i"><use href="#desktop"/></svg>Você</span></div>
+        <p>Feche a janela do Telao.exe. Só um servidor pode usar o túnel por vez.</p>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num">2</span></div><div class="body">
+        <div class="body-head"><h3>Mande o pacote</h3><span class="who you"><svg class="i"><use href="#desktop"/></svg>Você</span></div>
+        <p>Envie <code>telao\dist\Telao-portatil.zip</code> (57 MB) por Google Drive, OneDrive ou WeTransfer. Se mudou algo no app, gere de novo com <code>scripts\empacotar.ps1</code>.</p>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num">3</span></div><div class="body">
+        <div class="body-head"><h3>Extraia em <code>C:\Telao</code></h3><span class="who friend"><svg class="i"><use href="#server"/></svg>Amigo</span></div>
+        <p>Botão direito → <b>Extrair tudo…</b> → escolher <code>C:\</code>. Tem que ficar <code>C:\Telao\Telao.exe</code>. Use um caminho curto: o Windows corta arquivos com caminho acima de 260 caracteres.</p>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num">4</span></div><div class="body">
+        <div class="body-head"><h3>Descubra: IP público ou CGNAT?</h3><span class="who friend"><svg class="i"><use href="#server"/></svg>Amigo</span></div>
+        <p>No Prompt de Comando do servidor:</p>
+        <div class="code"><span class="label">cmd</span><button class="copy" type="button">Copiar</button><pre>cd C:\Telao\server &amp;&amp; ..\runtime\node.exe src\diagnose.js</pre></div>
+        <p>Anote o <b>IP local</b> e o <b>IP público</b> que aparecem. Depois, no roteador dele, veja o <b>IP WAN</b>:</p>
+        <ul>
+          <li><b>IP WAN igual ao IP público</b> → siga o caminho <b>A</b> (passo 5A).</li>
+          <li><b>Diferente</b> (começa com 100. ou 10.) ou sem acesso ao roteador → caminho <b>B</b> (passo 5B).</li>
+        </ul>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num sub">5A</span></div><div class="body">
+        <div class="body-head"><h3>Caminho A: liberar a porta</h3><span class="who web"><svg class="i"><use href="#globe"/></svg>Roteador</span><span class="who friend"><svg class="i"><use href="#server"/></svg>Amigo</span></div>
+        <p><b>No roteador dele:</b> encaminhe <b>UDP 40000</b> e <b>TCP 40000</b> para o IP local do servidor (do passo 4). O ideal é reservar esse IP (DHCP estático) para não mudar.</p>
+        <p><b>No arquivo</b> <code>C:\Telao\server\.env</code> (abrir com o Bloco de Notas), troque as linhas do playit por estas:</p>
+        <div class="code"><span class="label">.env — caminho A</span><button class="copy" type="button">Copiar</button><pre>MEDIA_UDP_PORT=40000
+MEDIA_TCP_PORT=40000
+MEDIA_ANNOUNCED_ADDRESS=auto
+MEDIA_IPV6=off
+TUNNEL=cloudflared
+ROOM_TTL_HOURS=168</pre></div>
+        <p><b>No firewall do Windows</b> (PowerShell como Administrador):</p>
+        <div class="code"><span class="label">PowerShell (admin)</span><button class="copy" type="button">Copiar</button><pre>powershell -ExecutionPolicy Bypass -File C:\Telao\scripts\firewall.ps1</pre></div>
+        <div class="note"><svg class="i"><use href="#alert"/></svg><span><code>ROOM_TTL_HOURS=168</code> faz a sala durar 7 dias em vez de 12 horas. Assim ninguém precisa recriar a sala toda hora num servidor que fica ligado.</span></div>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num sub">5B</span></div><div class="body">
+        <div class="body-head"><h3>Caminho B: playit no servidor</h3><span class="who friend"><svg class="i"><use href="#server"/></svg>Amigo</span><span class="who you"><svg class="i"><use href="#desktop"/></svg>Você</span></div>
+        <ul>
+          <li><b>Amigo:</b> instala o playit (<b>playit.gg/download</b>). Ao abrir, ele mostra um <b>link de vínculo</b> (claim). O amigo te manda esse link.</li>
+          <li><b>Você:</b> abre o link logado na sua conta do playit e aprova. O servidor dele vira um agente na sua conta.</li>
+          <li><b>Você:</b> em <b>playit.gg/account/tunnels</b>, abra o túnel <code>&lt;ENDERECO_DO_TUNEL_PLAYIT&gt;</code>, troque o <b>agente</b> para o do servidor e o <b>Local IP</b> para o IP local dele (passo 4). A porta continua &lt;PORTA_DO_TUNEL_PLAYIT&gt; e o Proxy Protocol continua None.</li>
+        </ul>
+        <p>O <code>.env</code> do pacote já vem pronto para esse caminho. Só acrescente <code>ROOM_TTL_HOURS=168</code> se quiser salas de 7 dias.</p>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num">6</span></div><div class="body">
+        <div class="body-head"><h3>Abrir o Telao.exe</h3><span class="who friend"><svg class="i"><use href="#server"/></svg>Amigo</span></div>
+        <ul>
+          <li><b>"O Windows protegeu o computador"</b> → <b>Mais informações → Executar assim mesmo</b>. Aparece porque o .exe não tem assinatura digital.</li>
+          <li><b>Firewall</b> pedindo acesso para o <b>node.exe</b> → marcar <b>privadas e públicas</b> → <b>Permitir</b>.</li>
+        </ul>
+        <p>Para ligar sozinho quando o PC dele reiniciar, rode uma vez <code>C:\Telao\scripts\install-startup.ps1</code>.</p>
+        <div class="note"><svg class="i"><use href="#alert"/></svg><span><b>Não deixar o PC suspender:</b> em Configurações → Sistema → Energia, ponha "Suspender" em <b>Nunca</b> (pelo menos na tomada). PC dormindo = Telão fora do ar. De preferência no cabo de rede, não no Wi-Fi.</span></div>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num">7</span></div><div class="body">
+        <div class="body-head"><h3>Criar a sala e mandar o link</h3><span class="who friend"><svg class="i"><use href="#server"/></svg>Amigo</span></div>
+        <p>O painel <code>localhost:3002</code> abre sozinho no servidor. Ele clica em <b>Criar sala</b> e manda o <b>Link para os amigos</b> para o grupo.</p>
+        <div class="note"><svg class="i"><use href="#alert"/></svg><span>O link HTTPS muda toda vez que o Telao.exe é reaberto ou o servidor reinicia. Combinem de mandar o link novo no grupo sempre que isso acontecer.</span></div>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num">8</span></div><div class="body">
+        <div class="body-head"><h3>Você administrar de longe (opcional)</h3><span class="who you"><svg class="i"><use href="#desktop"/></svg>Você</span></div>
+        <p>O painel nunca fica exposto na internet, de propósito. Para você criar salas sem depender dele, use um acesso remoto que ele autorize: <b>Área de Trabalho Remota</b>, <b>AnyDesk</b> ou <b>Chrome Remote Desktop</b>. Lá dentro, abra <code>localhost:3002</code> no navegador do servidor.</p>
+      </div></li>
+
+      <li class="step"><div class="rail"><span class="num">9</span></div><div class="body">
+        <div class="body-head"><h3>Testar de duas redes</h3><span class="who you"><svg class="i"><use href="#desktop"/></svg>Você</span></div>
+        <p>Do seu PC, entre pelo link e <b>transmita</b>. Pelo celular no <b>4G</b> (Wi-Fi desligado), entre e <b>assista</b>. No painel de quem transmite, o caminho deve aparecer como <code>UDP · direta (NAT) → &lt;IP do servidor&gt;:40000</code> no caminho A, ou <code>…:&lt;PORTA_DO_TUNEL_PLAYIT&gt;</code> no caminho B.</p>
+      </div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="confianca">
+    <span class="eyebrow">Combinados</span>
+    <h2 id="confianca">Segurança e confiança</h2>
+    <div class="grid2">
+      <div class="card"><svg class="i" style="color:var(--accent)"><use href="#key"/></svg><p><b>O dono do PC vê as salas.</b> Os códigos de acesso ficam salvos no computador dele (<code>server\.data</code>). Normal entre amigos, mas é bom saber.</p></div>
+      <div class="card"><svg class="i" style="color:var(--accent)"><use href="#key"/></svg><p><b>O painel nunca vai para a internet.</b> Não encaminhe as portas 3001 nem 3002 no roteador. Só a 40000, no caminho A.</p></div>
+      <div class="card"><svg class="i" style="color:var(--accent)"><use href="#key"/></svg><p><b>Acesso remoto só com permissão.</b> AnyDesk ou Área de Trabalho Remota servem para administrar. Ele pode desativar quando quiser.</p></div>
+      <div class="card"><svg class="i" style="color:var(--accent)"><use href="#key"/></svg><p><b>Link vazou?</b> Apague a sala no painel e crie outra: o link antigo para de funcionar na hora.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="problemas">
+    <span class="eyebrow">Se algo der errado</span>
+    <h2 id="problemas">Problemas comuns</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>O que aparece</th><th>Causa provável</th><th>O que fazer</th></tr></thead>
+        <tbody>
+          <tr><td><span class="bad">Falha na mídia</span></td><td>Caminho A: porta 40000 não liberada no roteador ou no firewall. Caminho B: túnel com agente ou Local IP errados.</td><td>Revise o passo 5A ou 5B. No caminho A, confirme que o IP WAN é igual ao IP público.</td></tr>
+          <tr><td>Painel mostra "IP público desconhecido"</td><td>O servidor não conseguiu consultar o STUN (UDP de saída bloqueado).</td><td>No <code>.env</code>, troque <code>MEDIA_ANNOUNCED_ADDRESS=auto</code> pelo IP público dele.</td></tr>
+          <tr><td>Link não abre</td><td>Telao.exe fechado ou link antigo (o servidor reiniciou).</td><td>Peça o link novo no painel.</td></tr>
+          <tr><td>Trava com muita gente</td><td>Upload do servidor no limite.</td><td>Usar 720p, menos pessoas assistindo ao mesmo tempo ou bitrate menor.</td></tr>
+          <tr><td>Erro de DLL ao abrir</td><td>Falta o runtime do Visual C++.</td><td>Instalar o "Microsoft Visual C++ Redistributable x64" e abrir de novo.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Telão · guia para hospedar no PC Windows de um amigo, fora da sua rede · 14/10/2026.</footer>
+</main>
+
+<script>
+  // Botões "Copiar" dos blocos de comando (com seleção do texto como alternativa).
+  document.querySelectorAll('.code').forEach(function (block) {
+    var btn = block.querySelector('.copy');
+    var pre = block.querySelector('pre');
+    btn.addEventListener('click', function () {
+      var text = pre.innerText;
+      var done = function () { btn.textContent = 'Copiado'; setTimeout(function () { btn.textContent = 'Copiar'; }, 1500); };
+      var select = function () {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        btn.textContent = 'Ctrl+C';
+      };
+      try { navigator.clipboard.writeText(text).then(done, select); } catch (e) { select(); }
+    });
+  });
+</script>

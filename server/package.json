@@ -1,0 +1,19 @@
+{
+  "name": "telao-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Servidor de sinalização + SFU mediasoup do Telão",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "diagnose": "node src/diagnose.js"
+  },
+  "dependencies": {
+    "mediasoup": "^3.29.0",
+    "ws": "^8.22.0"
+  }
+}

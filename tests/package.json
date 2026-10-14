@@ -1,0 +1,14 @@
+{
+  "name": "telao-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "e2e": "node e2e.mjs",
+    "e2e:viewers": "node e2e.mjs --viewers-only"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.0"
+  }
+}
