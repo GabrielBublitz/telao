@@ -147,6 +147,9 @@ try {
   for (let i = 1; i <= VIEWERS; i++) viewers.push(await joinPage(browser, viewerLink, `Espectador ${i}`));
   if (a['watch-all']) {
     for (const v of viewers) {
+      // Espera a abertura automática da primeira transmissão terminar; senão o botão pode mudar de
+      // "Assistir" para "Parar de assistir" entre a leitura e o clique, e o clique fecharia a transmissão.
+      if (BROADCASTERS) await v.waitForFunction(() => window.__telao.session.snapshot.watched.length >= 1, null, { timeout: 15_000 });
       for (let i = 1; i <= BROADCASTERS; i++) {
         const btn = v.getByTestId(`watch-Transmissor ${i}`);
         if ((await btn.textContent())?.includes('Assistir')) await btn.click();

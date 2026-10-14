@@ -39,21 +39,32 @@ function StreamTile({ tile }: { tile: Tile }) {
   const [needsClick, setNeedsClick] = useState(false);
   const [volume, setVolume] = useState(1);
   const audible = tile.hasAudio && !tile.isLocal;
+  const userMuted = useRef(false); // mudo escolhido pela pessoa: respeitado quando o fluxo muda
 
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
+    let cancelled = false;
     v.srcObject = tile.stream;
     setNeedsClick(false);
     // Tenta tocar com som; se o navegador bloquear o autoplay com áudio, toca mudo e pede um clique.
-    v.muted = !audible;
-    setMuted(!audible);
-    v.play().catch(() => {
+    const wantSound = audible && !userMuted.current;
+    v.muted = !wantSound;
+    setMuted(!wantSound);
+    v.play().catch((e: unknown) => {
+      // Trocar o fluxo (ex.: o áudio chega logo depois do vídeo) cancela o play anterior com AbortError.
+      // Isso não é bloqueio de som: ignorar, senão o quadro ficaria mudo à toa.
+      if (cancelled || (e instanceof DOMException && e.name === 'AbortError')) return;
       v.muted = true;
       setMuted(true);
-      v.play().catch(() => setNeedsClick(true));
-      if (audible) setNeedsClick(true);
+      v.play().catch((e2: unknown) => {
+        if (!cancelled && !(e2 instanceof DOMException && e2.name === 'AbortError')) setNeedsClick(true);
+      });
+      if (wantSound) setNeedsClick(true);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [tile.stream, audible]);
 
   // O navegador pausa vídeos de abas em segundo plano; ao voltar para a aba (ou se pausar sozinho), retoma.
@@ -70,6 +81,17 @@ function StreamTile({ tile }: { tile: Tile }) {
       v.removeEventListener('pause', resume);
     };
   }, [tile.stream]);
+
+  // Ao sair da tela, para e solta o vídeo: um <video> removido da página mas ainda tocando continua
+  // "tocando" para o navegador (ícone de som na aba) e segura o fluxo na memória.
+  useEffect(() => {
+    const v = videoRef.current;
+    return () => {
+      if (!v) return;
+      v.pause();
+      v.srcObject = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = volume;
@@ -92,6 +114,7 @@ function StreamTile({ tile }: { tile: Tile }) {
 
   const mute = () => {
     if (videoRef.current) videoRef.current.muted = true;
+    userMuted.current = true;
     setMuted(true);
   };
 
@@ -99,6 +122,7 @@ function StreamTile({ tile }: { tile: Tile }) {
     const v = videoRef.current;
     if (!v) return;
     v.muted = false;
+    userMuted.current = false;
     setMuted(false);
     setNeedsClick(false);
     void v.play();
