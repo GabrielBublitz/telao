@@ -440,3 +440,26 @@ select option {
     transition: none;
   }
 }
+
+/* Modo foco: sem painéis em volta; a transmissão usa a largura toda e cabe na altura da tela */
+.page.focus {
+  max-width: none;
+}
+.layout.focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* 1 transmissão: o maior 16:9 que cabe na tela (desconta o topo da página) */
+.layout.focus .grid.n1 > .stage {
+  width: min(100%, calc((100dvh - 100px) * 16 / 9));
+  margin-inline: auto;
+}
+/* 3 ou mais: duas linhas precisam caber na altura */
+.layout.focus .grid.n3 {
+  width: min(100%, calc((100dvh - 108px) / 2 * 16 / 9 * 2 + 8px));
+  margin-inline: auto;
+}
+
+/* Elementos com o atributo hidden somem mesmo com display definido por classe (ex.: .stack) */
+[hidden] {
+  display: none !important;
+}

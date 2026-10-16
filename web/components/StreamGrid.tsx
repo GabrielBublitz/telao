@@ -23,7 +23,7 @@ export default function StreamGrid({ tiles, emptyText }: { tiles: Tile[]; emptyT
     );
   }
   return (
-    <div className="grid" style={{ ['--cols' as string]: tiles.length === 1 ? 1 : 2 }} data-testid="grid">
+    <div className={`grid n${Math.min(tiles.length, 3)}`} style={{ ['--cols' as string]: tiles.length === 1 ? 1 : 2 }} data-testid="grid">
       {tiles.map((t) => (
         <StreamTile key={t.key} tile={t} />
       ))}

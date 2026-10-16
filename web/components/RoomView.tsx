@@ -7,6 +7,8 @@ import StreamGrid, { type Tile } from './StreamGrid';
 import BroadcastPanel from './BroadcastPanel';
 import StatsPanel from './StatsPanel';
 
+const FOCUS_KEY = 'telao:foco';
+
 function connectionBadge(s: Snapshot): { cls: string; text: string } {
   if (s.phase === 'connecting') return { cls: 'warn', text: 'Conectando…' };
   if (s.phase === 'reconnecting') return { cls: 'warn', text: 'Reconectando…' };
@@ -33,6 +35,24 @@ export default function RoomView({
     [link.signalOrigin, link.roomId, link.key, nickname, link.publicRouteOnly],
   );
   const [s, setS] = useState<Snapshot>(session.snapshot);
+  // Modo foco: esconde os painéis em volta e deixa as transmissões ocuparem a tela (lembrado por navegador).
+  const [focusPref, setFocusPref] = useState(false);
+  useEffect(() => {
+    try {
+      setFocusPref(localStorage.getItem(FOCUS_KEY) === '1');
+    } catch {
+      // armazenamento indisponível
+    }
+  }, []);
+  const toggleFocus = () => {
+    const next = !focusPref;
+    setFocusPref(next);
+    try {
+      localStorage.setItem(FOCUS_KEY, next ? '1' : '0');
+    } catch {
+      // armazenamento indisponível
+    }
+  };
 
   useEffect(() => {
     const unsub = session.subscribe(setS);
@@ -82,8 +102,11 @@ export default function RoomView({
           ? `Clique em "Assistir" na lista Ao vivo para ver ${pendingOthers.map((b) => b.nickname).join(', ')}.`
           : 'Ninguém está transmitindo. Clique em "Transmitir" para começar.';
 
+  // Só faz sentido com algo na tela; sem transmissão, a página volta ao normal (botão de transmitir visível).
+  const focus = focusPref && tiles.length > 0;
+
   return (
-    <main className="page">
+    <main className={`page${focus ? ' focus' : ''}`}>
       <header className="topbar">
         <div className="row">
           <a href="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}>
@@ -100,6 +123,17 @@ export default function RoomView({
           <span className="badge" title="Transmissões ao vivo">
             🔴 {broadcasters.length}
           </span>
+          {tiles.length > 0 && (
+            <button
+              className={focus ? '' : 'ghost'}
+              style={{ padding: '4px 10px', fontSize: 13 }}
+              onClick={toggleFocus}
+              title={focus ? 'Mostrar os painéis em volta da transmissão' : 'Esconder os painéis e deixar a transmissão em destaque'}
+              data-testid="focus"
+            >
+              {focus ? '◧ Mostrar painéis' : '⛶ Modo foco'}
+            </button>
+          )}
           <button
             className="ghost"
             style={{ padding: '4px 10px', fontSize: 13 }}
@@ -115,25 +149,25 @@ export default function RoomView({
       </header>
 
       {s.error && <div className="alert bad" style={{ marginBottom: 12 }}>{s.error}</div>}
-      {s.notice && <div className="alert info" style={{ marginBottom: 12 }}>{s.notice}</div>}
-      {room?.resolutionCap && broadcasters.length > 0 && (
+      {!focus && s.notice && <div className="alert info" style={{ marginBottom: 12 }}>{s.notice}</div>}
+      {!focus && room?.resolutionCap && broadcasters.length > 0 && (
         <div className="alert warn" style={{ marginBottom: 12 }}>
           {broadcasters.length} transmissões ao vivo: todas estão limitadas a {room.resolutionCap}p para caber na banda.
         </div>
       )}
-      {s.watched.length > 1 && (
+      {!focus && s.watched.length > 1 && (
         <div className="alert info" style={{ marginBottom: 12 }}>
           Assistindo {s.watched.length} transmissões ao mesmo tempo: cada uma usa a sua banda. Se travar, feche alguma no ✕.
         </div>
       )}
 
-      <div className="layout">
+      <div className={`layout${focus ? ' focus' : ''}`}>
         <div className="stack">
           <StreamGrid tiles={tiles} emptyText={emptyText} />
-          <StatsPanel session={session} snapshot={s} />
+          {!focus && <StatsPanel session={session} snapshot={s} />}
         </div>
 
-        <aside className="stack">
+        <aside className="stack" hidden={focus}>
           <section className="card" data-testid="live-list">
             <h2 className="section-title">Ao vivo ({broadcasters.length})</h2>
             {broadcasters.length === 0 && <p className="muted small" style={{ margin: 0 }}>Nenhuma transmissão no momento.</p>}
