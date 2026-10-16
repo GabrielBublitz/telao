@@ -419,3 +419,24 @@ select option {
   background-color: var(--panel-2);
   color: var(--fg);
 }
+
+/* Controles do quadro: escondidos até o mouse passar/mexer sobre a transmissão */
+.tile .tile-controls {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.tile.show-controls .tile-controls,
+.tile .tile-controls:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Em tela cheia, o cursor some junto com os controles */
+.tile:fullscreen:not(.show-controls) {
+  cursor: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile .tile-controls {
+    transition: none;
+  }
+}

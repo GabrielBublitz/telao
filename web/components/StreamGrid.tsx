@@ -38,6 +38,9 @@ function StreamTile({ tile }: { tile: Tile }) {
   const [muted, setMuted] = useState(true);
   const [needsClick, setNeedsClick] = useState(false);
   const [volume, setVolume] = useState(1);
+  // Controles só aparecem com o mouse sobre a transmissão (e somem após alguns segundos parado).
+  const [showControls, setShowControls] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audible = tile.hasAudio && !tile.isLocal;
   const userMuted = useRef(false); // mudo escolhido pela pessoa: respeitado quando o fluxo muda
 
@@ -112,6 +115,24 @@ function StreamTile({ tile }: { tile: Tile }) {
     else video?.webkitEnterFullscreen?.(); // iPhone/iPad
   };
 
+  const revealControls = (ms = 2500) => {
+    setShowControls(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setShowControls(false), ms);
+  };
+
+  const hideControls = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setShowControls(false);
+  };
+
+  useEffect(
+    () => () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    },
+    [],
+  );
+
   const mute = () => {
     if (videoRef.current) videoRef.current.muted = true;
     userMuted.current = true;
@@ -129,14 +150,22 @@ function StreamTile({ tile }: { tile: Tile }) {
   };
 
   return (
-    <div className="stage" ref={boxRef} onDoubleClick={() => void toggleFullscreen()}>
+    <div
+      className={`stage tile${showControls ? ' show-controls' : ''}`}
+      ref={boxRef}
+      onDoubleClick={() => void toggleFullscreen()}
+      onMouseMove={() => revealControls()}
+      onMouseLeave={hideControls}
+      onTouchStart={() => revealControls(3500)}
+      onFocus={() => revealControls(6000)}
+    >
       <video ref={videoRef} autoPlay playsInline muted data-testid="video" />
       <div className="stage-tag">
         {tile.label}
         {tile.badge && <span className="warn"> · {tile.badge}</span>}
       </div>
       {tile.onClose && (
-        <button className="tile-close" onClick={tile.onClose} title="Parar de assistir esta transmissão" aria-label="Parar de assistir">
+        <button className="tile-close tile-controls" onClick={tile.onClose} title="Parar de assistir esta transmissão" aria-label="Parar de assistir">
           ✕
         </button>
       )}
@@ -145,7 +174,7 @@ function StreamTile({ tile }: { tile: Tile }) {
           <button onClick={unmute}>{audible ? '🔊 Clique para ouvir' : '▶ Reproduzir'}</button>
         </div>
       )}
-      <div className="stage-actions">
+      <div className="stage-actions tile-controls">
         {audible && (
           <>
             <button className="ghost" onClick={muted ? unmute : mute}>
