@@ -120,6 +120,20 @@ export default function RoomView({
             <span className="dot" />
             {badge.text}
           </span>
+          {room?.resolutionCap && broadcasters.length > 0 && (
+            <HeaderHint
+              cls="warn"
+              label={`⚠ ${room.resolutionCap}p`}
+              text={`${broadcasters.length} transmissões ao vivo: todas estão limitadas a ${room.resolutionCap}p para caber na banda. Volta ao normal quando sobrarem ${room.max1080pBroadcasters} ou menos.`}
+            />
+          )}
+          {s.watched.length > 1 && (
+            <HeaderHint
+              cls="info"
+              label={`▦ ${s.watched.length}`}
+              text={`Assistindo ${s.watched.length} transmissões ao mesmo tempo: cada uma usa a sua banda. Se travar, feche alguma no ✕.`}
+            />
+          )}
           <span className="badge" title="Transmissões ao vivo">
             🔴 {broadcasters.length}
           </span>
@@ -150,16 +164,6 @@ export default function RoomView({
 
       {s.error && <div className="alert bad" style={{ marginBottom: 12 }}>{s.error}</div>}
       {!focus && s.notice && <div className="alert info" style={{ marginBottom: 12 }}>{s.notice}</div>}
-      {!focus && room?.resolutionCap && broadcasters.length > 0 && (
-        <div className="alert warn" style={{ marginBottom: 12 }}>
-          {broadcasters.length} transmissões ao vivo: todas estão limitadas a {room.resolutionCap}p para caber na banda.
-        </div>
-      )}
-      {!focus && s.watched.length > 1 && (
-        <div className="alert info" style={{ marginBottom: 12 }}>
-          Assistindo {s.watched.length} transmissões ao mesmo tempo: cada uma usa a sua banda. Se travar, feche alguma no ✕.
-        </div>
-      )}
 
       <div className={`layout${focus ? ' focus' : ''}`}>
         <div className="stack">
@@ -221,5 +225,17 @@ export default function RoomView({
         </aside>
       </div>
     </main>
+  );
+}
+
+/** Indicador compacto do cabeçalho: a explicação aparece num balão ao passar o mouse (ou focar/tocar). */
+function HeaderHint({ cls, label, text }: { cls: 'warn' | 'info'; label: string; text: string }) {
+  return (
+    <span className={`badge hint-badge ${cls}`} tabIndex={0} aria-label={text}>
+      {label}
+      <span className="hint-pop right" role="tooltip">
+        <span className={cls === 'warn' ? 'warn' : 'muted'}>{text}</span>
+      </span>
+    </span>
   );
 }

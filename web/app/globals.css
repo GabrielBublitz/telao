@@ -463,3 +463,21 @@ select option {
 [hidden] {
   display: none !important;
 }
+
+/* Indicadores compactos no cabeçalho, com balão de explicação (mesmo balão do "i" de qualidade) */
+.hint-badge {
+  position: relative;
+  cursor: help;
+}
+.hint-badge.warn {
+  border-color: rgba(245, 184, 76, 0.45);
+}
+.hint-badge:hover .hint-pop,
+.hint-badge:focus .hint-pop,
+.hint-badge:focus-within .hint-pop {
+  display: flex;
+}
+.hint-pop.right {
+  left: auto;
+  right: 0;
+}
