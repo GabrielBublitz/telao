@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RoomLink } from '@/lib/link';
 import { RoomSession, streamKey, wsUrlFor, type Snapshot, type WatchedStream } from '@/lib/session';
 import StreamGrid, { type Tile } from './StreamGrid';
@@ -9,6 +9,30 @@ import StatsPanel from './StatsPanel';
 import NoticeHint from './NoticeHint';
 
 const FOCUS_KEY = 'telao:foco';
+
+// Tempo mínimo que um erro fica no "i", mesmo que a sessão já o tenha limpado (ex.: logo após reconectar).
+const ERROR_MIN_MS = 30_000;
+
+/** Mantém a última mensagem visível por pelo menos `minMs` desde que apareceu. */
+function useLinger(text: string | null, minMs: number): string | null {
+  const [shown, setShown] = useState<string | null>(text);
+  const since = useRef(0);
+  useEffect(() => {
+    if (text) {
+      setShown(text);
+      since.current = Date.now();
+      return;
+    }
+    const left = since.current + minMs - Date.now();
+    if (left <= 0) {
+      setShown(null);
+      return;
+    }
+    const t = setTimeout(() => setShown(null), left);
+    return () => clearTimeout(t);
+  }, [text, minMs]);
+  return text ?? shown;
+}
 
 function connectionBadge(s: Snapshot): { cls: string; text: string } {
   if (s.phase === 'connecting') return { cls: 'warn', text: 'Conectando…' };
@@ -68,7 +92,8 @@ export default function RoomView({
 
   // Avisos dispensados (pelo texto): somem até aparecer uma mensagem diferente.
   const [dismissed, setDismissed] = useState<string[]>([]);
-  const error = s.error && !dismissed.includes(s.error) ? s.error : null;
+  const lastError = useLinger(s.error, ERROR_MIN_MS);
+  const error = lastError && !dismissed.includes(lastError) ? lastError : null;
   const notice = s.notice && !dismissed.includes(s.notice) ? s.notice : null;
   const dismiss = (text: string) => setDismissed((d) => [...d.slice(-9), text]);
 
