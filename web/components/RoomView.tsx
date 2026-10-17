@@ -6,6 +6,7 @@ import { RoomSession, streamKey, wsUrlFor, type Snapshot, type WatchedStream } f
 import StreamGrid, { type Tile } from './StreamGrid';
 import BroadcastPanel from './BroadcastPanel';
 import StatsPanel from './StatsPanel';
+import NoticeHint from './NoticeHint';
 
 const FOCUS_KEY = 'telao:foco';
 
@@ -64,6 +65,12 @@ export default function RoomView({
       session.close();
     };
   }, [session]);
+
+  // Avisos dispensados (pelo texto): somem até aparecer uma mensagem diferente.
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const error = s.error && !dismissed.includes(s.error) ? s.error : null;
+  const notice = s.notice && !dismissed.includes(s.notice) ? s.notice : null;
+  const dismiss = (text: string) => setDismissed((d) => [...d.slice(-9), text]);
 
   const badge = connectionBadge(s);
   const room = s.room;
@@ -132,6 +139,8 @@ export default function RoomView({
           {s.roomName && s.roomName.toLowerCase() !== 'telão' && <span className="muted">{s.roomName}</span>}
         </div>
         <div className="row">
+          {error && <NoticeHint level="bad" text={error} align="right" onDismiss={() => dismiss(error)} testId="error-hint" />}
+          {notice && <NoticeHint level="info" text={notice} align="right" onDismiss={() => dismiss(notice)} testId="notice-hint" />}
           <span className={`badge ${badge.cls}`} data-testid="connection">
             <span className="dot" />
             {badge.text}
@@ -177,9 +186,6 @@ export default function RoomView({
           </span>
         </div>
       </header>
-
-      {s.error && <div className="alert bad" style={{ marginBottom: 12 }}>{s.error}</div>}
-      {!focus && s.notice && <div className="alert info" style={{ marginBottom: 12 }}>{s.notice}</div>}
 
       <div className={`layout${focus ? ' focus' : ''}`}>
         <div className="stack">

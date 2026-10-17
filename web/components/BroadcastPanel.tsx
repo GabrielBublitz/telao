@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { CAPPED_MAX_KBPS, type AudioMode, type BroadcastOptions, type RoomSession, type Snapshot } from '@/lib/session';
+import NoticeHint from './NoticeHint';
 
 // v2: o padrão passou a ser 720p; a chave nova descarta preferências antigas salvas em 1080p.
 const OPTS_KEY = 'telao:broadcast:v2';
@@ -84,13 +85,23 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
 
   return (
     <section className="card stack">
-      <h2 className="section-title">Transmissão</h2>
-
-      {!canCapture && (
-        <div className="alert info">
-          Este navegador não permite compartilhar a tela (celulares não suportam). Você pode assistir normalmente.
-        </div>
-      )}
+      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+        <h2 className="section-title" style={{ margin: 0 }}>
+          Transmissão
+        </h2>
+        {!canCapture && (
+          <NoticeHint
+            level="info"
+            text="Este navegador não permite compartilhar a tela (celulares não suportam). Você pode assistir normalmente."
+          />
+        )}
+        {s.broadcasting && s.capped && (
+          <NoticeHint
+            level="warn"
+            text={`Sua transmissão está limitada a 720p e ${CAPPED_MAX_KBPS / 1000} Mbps porque há mais de ${room?.max1080pBroadcasters} transmissões ao vivo. Volta ao normal quando alguém encerrar.`}
+          />
+        )}
+      </div>
 
       {/* Botão e resolução lado a lado */}
       <div className="row control-row" style={{ flexWrap: 'nowrap' }}>
@@ -152,12 +163,6 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
         <div className="muted small">{s.sendingAudio ? '🔊 Enviando áudio junto com a tela' : '🔇 Transmitindo sem áudio'}</div>
       )}
       {full && <div className="muted small">Limite de {room?.maxBroadcasters} transmissões simultâneas atingido.</div>}
-      {s.broadcasting && s.capped && (
-        <div className="alert warn small">
-          Sua transmissão está limitada a 720p e {CAPPED_MAX_KBPS / 1000} Mbps porque há mais de {room?.max1080pBroadcasters}{' '}
-          transmissões ao vivo. Volta ao normal quando alguém encerrar.
-        </div>
-      )}
       {wouldBeCapped && (
         <div className="muted small">
           Com a sua, serão {(room?.broadcasters.length ?? 0) + 1} transmissões: todas ficarão limitadas a 720p.

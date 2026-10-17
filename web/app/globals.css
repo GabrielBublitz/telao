@@ -342,6 +342,10 @@ h1 {
   background: var(--line);
   color: var(--fg);
 }
+.hint-bad {
+  background: var(--bad);
+  color: #1a0000;
+}
 .hint-pop {
   display: none;
   position: absolute;
@@ -359,8 +363,21 @@ h1 {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   font: 400 13px/1.45 system-ui, 'Segoe UI', sans-serif;
   text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--fg);
   cursor: default;
 }
+/* Ponte invisível sobre o espaço entre o ícone e o balão, para o mouse alcançar o botão Dispensar. */
+.hint-pop::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+}
+.hint.open .hint-pop,
 .hint:hover .hint-pop,
 .hint:focus .hint-pop,
 .hint:focus-within .hint-pop {
