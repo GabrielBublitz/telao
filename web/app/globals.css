@@ -481,3 +481,70 @@ select option {
   left: auto;
   right: 0;
 }
+
+/* Câmeras: faixa de quadros pequenos abaixo das telas */
+.cam-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.cam-strip > .stage {
+  flex: 0 0 auto;
+  width: clamp(160px, 22%, 260px);
+}
+.stage.compact .stage-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  left: 8px;
+  top: 8px;
+}
+.stage.compact .stage-actions {
+  right: 8px;
+  bottom: 8px;
+}
+.stage.compact .stage-actions button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.stage.compact .tile-close {
+  right: 6px;
+  top: 6px;
+  padding: 0 7px;
+  font-size: 12px;
+}
+/* Própria câmera espelhada (só a prévia local; quem assiste vê normal) */
+.stage.mirror video {
+  transform: scaleX(-1);
+}
+/* Botão discreto em linha (ex.: "ver câmera" na lista da sala) */
+button.link-btn {
+  padding: 0 6px;
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 0;
+  color: var(--accent);
+}
+
+/* Linha Transmitir · resolução · câmera · engrenagem: cabe no cartão sem estourar */
+.control-row {
+  gap: 6px;
+}
+.control-row > button:first-child {
+  padding-inline: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.control-row select {
+  width: auto;
+  flex: none;
+  padding-left: 10px;
+  padding-right: 28px;
+  background-position: right 8px center;
+}
+.control-row button.icon-only {
+  width: 40px;
+  height: 40px;
+}

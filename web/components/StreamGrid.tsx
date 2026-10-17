@@ -11,11 +11,17 @@ export type Tile = {
   badge?: string | null; // ex.: "camada reduzida"
   onClose?: () => void;
   onKeyFrame?: () => void;
+  mirror?: boolean; // própria câmera: espelhada, como num espelho
 };
 
-/** Grade de transmissões lado a lado (1 = tela toda; 2+ = duas colunas). */
-export default function StreamGrid({ tiles, emptyText }: { tiles: Tile[]; emptyText: string }) {
-  if (tiles.length === 0) {
+/**
+ * Grade de transmissões lado a lado (1 = tela toda; 2+ = duas colunas) e, abaixo, a faixa de câmeras.
+ * Sem nenhuma tela na grade, as câmeras ocupam o espaço principal.
+ */
+export default function StreamGrid({ tiles, cameraTiles = [], emptyText }: { tiles: Tile[]; cameraTiles?: Tile[]; emptyText: string }) {
+  const main = tiles.length ? tiles : cameraTiles;
+  const strip = tiles.length ? cameraTiles : [];
+  if (main.length === 0) {
     return (
       <div className="stage">
         <div className="stage-empty">{emptyText}</div>
@@ -23,15 +29,24 @@ export default function StreamGrid({ tiles, emptyText }: { tiles: Tile[]; emptyT
     );
   }
   return (
-    <div className={`grid n${Math.min(tiles.length, 3)}`} style={{ ['--cols' as string]: tiles.length === 1 ? 1 : 2 }} data-testid="grid">
-      {tiles.map((t) => (
-        <StreamTile key={t.key} tile={t} />
-      ))}
+    <div className="stack" style={{ gap: 8 }}>
+      <div className={`grid n${Math.min(main.length, 3)}`} style={{ ['--cols' as string]: main.length === 1 ? 1 : 2 }} data-testid="grid">
+        {main.map((t) => (
+          <StreamTile key={t.key} tile={t} />
+        ))}
+      </div>
+      {strip.length > 0 && (
+        <div className="cam-strip" data-testid="camera-strip">
+          {strip.map((t) => (
+            <StreamTile key={t.key} tile={t} compact />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function StreamTile({ tile }: { tile: Tile }) {
+function StreamTile({ tile, compact = false }: { tile: Tile; compact?: boolean }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
@@ -151,7 +166,7 @@ function StreamTile({ tile }: { tile: Tile }) {
 
   return (
     <div
-      className={`stage tile${showControls ? ' show-controls' : ''}`}
+      className={`stage tile${showControls ? ' show-controls' : ''}${compact ? ' compact' : ''}${tile.mirror ? ' mirror' : ''}`}
       ref={boxRef}
       onDoubleClick={() => void toggleFullscreen()}
       onMouseMove={() => revealControls()}
@@ -194,13 +209,13 @@ function StreamTile({ tile }: { tile: Tile }) {
             )}
           </>
         )}
-        {tile.onKeyFrame && (
+        {tile.onKeyFrame && !compact && (
           <button className="ghost" onClick={tile.onKeyFrame} title="Pede um quadro completo ao transmissor (útil se a imagem travar)">
             Atualizar imagem
           </button>
         )}
-        <button className="ghost" onClick={() => void toggleFullscreen()}>
-          {fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+        <button className="ghost" onClick={() => void toggleFullscreen()} title={fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}>
+          {compact ? '⛶' : fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
         </button>
       </div>
     </div>

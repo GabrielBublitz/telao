@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { RoomLink } from '@/lib/link';
-import { RoomSession, wsUrlFor, type Snapshot } from '@/lib/session';
+import { RoomSession, streamKey, wsUrlFor, type Snapshot, type WatchedStream } from '@/lib/session';
 import StreamGrid, { type Tile } from './StreamGrid';
 import BroadcastPanel from './BroadcastPanel';
 import StatsPanel from './StatsPanel';
@@ -69,18 +69,34 @@ export default function RoomView({
   const room = s.room;
   const broadcasters = room?.broadcasters ?? [];
   const others = broadcasters.filter((b) => b.peerId !== s.peerId);
-  const watchedIds = new Set(s.watched.map((w) => w.peerId));
+  const watchedKeys = new Set(s.watched.map((w) => w.key));
+  const cameras = room?.cameras ?? [];
 
-  const tiles: Tile[] = s.watched.map((w) => ({
-    key: w.peerId,
-    label: w.nickname,
+  const toTile = (w: WatchedStream): Tile => ({
+    key: w.key,
+    label: w.source === 'camera' ? `📷 ${w.nickname}` : w.nickname,
     stream: w.stream,
     isLocal: false,
     hasAudio: w.hasAudio,
     badge: w.layer.count > 1 && w.layer.current !== null && w.layer.current < w.layer.count - 1 ? 'qualidade reduzida (conexão)' : null,
-    onClose: () => session.unwatch(w.peerId),
-    onKeyFrame: () => session.requestKeyFrame(w.peerId),
-  }));
+    onClose: () => session.unwatch(w.key),
+    onKeyFrame: w.source === 'screen' ? () => session.requestKeyFrame(w.key) : undefined,
+  });
+  const screenWatched = s.watched.filter((w) => w.source === 'screen');
+  const tiles: Tile[] = screenWatched.map(toTile);
+  // Câmeras: a própria (espelhada, só local) e as dos outros.
+  const cameraTiles: Tile[] = s.watched.filter((w) => w.source === 'camera').map(toTile);
+  if (s.cameraStream) {
+    cameraTiles.unshift({
+      key: 'my-camera',
+      label: '📷 Você',
+      stream: s.cameraStream,
+      isLocal: true,
+      hasAudio: false,
+      mirror: true,
+      onClose: () => void session.stopCamera(),
+    });
+  }
   if (s.previewing && s.localStream) {
     tiles.push({
       key: 'preview',
@@ -92,7 +108,7 @@ export default function RoomView({
     });
   }
 
-  const pendingOthers = others.filter((b) => watchedIds.has(b.peerId) === false);
+  const pendingOthers = others.filter((b) => !watchedKeys.has(streamKey(b.peerId, 'screen')));
   const emptyText =
     s.phase !== 'joined'
       ? 'Conectando à sala…'
@@ -103,7 +119,7 @@ export default function RoomView({
           : 'Ninguém está transmitindo. Clique em "Transmitir" para começar.';
 
   // Só faz sentido com algo na tela; sem transmissão, a página volta ao normal (botão de transmitir visível).
-  const focus = focusPref && tiles.length > 0;
+  const focus = focusPref && tiles.length + cameraTiles.length > 0;
 
   return (
     <main className={`page${focus ? ' focus' : ''}`}>
@@ -127,17 +143,17 @@ export default function RoomView({
               text={`${broadcasters.length} transmissões ao vivo: todas estão limitadas a ${room.resolutionCap}p para caber na banda. Volta ao normal quando sobrarem ${room.max1080pBroadcasters} ou menos.`}
             />
           )}
-          {s.watched.length > 1 && (
+          {screenWatched.length > 1 && (
             <HeaderHint
               cls="info"
-              label={`▦ ${s.watched.length}`}
-              text={`Assistindo ${s.watched.length} transmissões ao mesmo tempo: cada uma usa a sua banda. Se travar, feche alguma no ✕.`}
+              label={`▦ ${screenWatched.length}`}
+              text={`Assistindo ${screenWatched.length} transmissões ao mesmo tempo: cada uma usa a sua banda. Se travar, feche alguma no ✕.`}
             />
           )}
           <span className="badge" title="Transmissões ao vivo">
             🔴 {broadcasters.length}
           </span>
-          {tiles.length > 0 && (
+          {tiles.length + cameraTiles.length > 0 && (
             <button
               className={focus ? '' : 'ghost'}
               style={{ padding: '4px 10px', fontSize: 13 }}
@@ -167,7 +183,7 @@ export default function RoomView({
 
       <div className={`layout${focus ? ' focus' : ''}`}>
         <div className="stack">
-          <StreamGrid tiles={tiles} emptyText={emptyText} />
+          <StreamGrid tiles={tiles} cameraTiles={cameraTiles} emptyText={emptyText} />
           {!focus && <StatsPanel session={session} snapshot={s} />}
         </div>
 
@@ -178,7 +194,8 @@ export default function RoomView({
             <ul className="people">
               {broadcasters.map((b) => {
                 const mine = b.peerId === s.peerId;
-                const on = mine ? s.previewing : watchedIds.has(b.peerId);
+                const key = streamKey(b.peerId, 'screen');
+                const on = mine ? s.previewing : watchedKeys.has(key);
                 return (
                   <li key={b.peerId} className="row" style={{ justifyContent: 'space-between' }}>
                     <span>
@@ -189,7 +206,7 @@ export default function RoomView({
                     <button
                       className={on ? '' : 'ghost'}
                       style={{ padding: '4px 10px', fontSize: 13 }}
-                      onClick={() => (mine ? session.setPreview(!on) : on ? session.unwatch(b.peerId) : session.watch(b.peerId))}
+                      onClick={() => (mine ? session.setPreview(!on) : on ? session.unwatch(key) : session.watch(key))}
                       data-testid={mine ? 'preview' : `watch-${b.nickname}`}
                     >
                       {mine ? (on ? 'Ocultar prévia' : 'Ver prévia') : on ? 'Parar de assistir' : 'Assistir'}
@@ -211,12 +228,21 @@ export default function RoomView({
                   .map((pid) => broadcasters.find((b) => b.producerId === pid))
                   .filter(Boolean)
                   .map((b) => (b!.peerId === s.peerId ? 'você' : b!.nickname));
+                const camKey = streamKey(p.id, 'camera');
+                const hasCam = cameras.some((c) => c.peerId === p.id);
+                const camHidden = hasCam && p.id !== s.peerId && !watchedKeys.has(camKey);
                 return (
                   <li key={p.id}>
                     {p.broadcasting ? '🔴 ' : '• '}
                     {p.nickname}
                     {p.id === s.peerId && <span className="muted"> (você)</span>}
+                    {hasCam && <span title="Câmera ligada"> 📷</span>}
                     {names.length > 0 && <span className="muted small"> · vendo {names.join(', ')}</span>}
+                    {camHidden && (
+                      <button className="ghost link-btn" onClick={() => session.watch(camKey)} title="Mostrar a câmera de novo">
+                        ver câmera
+                      </button>
+                    )}
                   </li>
                 );
               })}

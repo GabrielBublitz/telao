@@ -54,6 +54,14 @@ Outros detalhes:
 - A interface avisa quando a transmissão saiu sem som ou com o som do PC inteiro.
 - Quem assiste ouve pelo próprio quadro, com mudo e volume. Se o navegador bloquear o som automático, aparece o botão **"🔊 Clique para ouvir"**.
 
+### Câmera
+O botão 📷 ao lado de **Transmitir** liga a webcam, com ou sem transmitir a tela.
+- Só vídeo, sem microfone: a voz continua no Discord. Vai em 640×360 a 30 fps, até 600 kbps, então pesa pouco.
+- As câmeras aparecem sozinhas para todos, numa faixa abaixo da tela compartilhada. Se ninguém estiver transmitindo a tela, elas ocupam a área principal.
+- A sua câmera aparece espelhada só para você. O ✕ dela desliga a câmera.
+- Para quem assiste, o ✕ só esconde aquela câmera. Para ver de novo, use "ver câmera" na lista **Na sala**.
+- A câmera não conta no limite de transmissões nem no limite de 720p.
+
 ### Qualidade
 - **Captura:** quem transmite escolhe **720p (1280×720, padrão)** ou **1080p (1920×1080)**, sempre a 30 FPS (`getDisplayMedia`). O 720p é mais leve: use se estiver travando. O codec é VP8 (padrão) ou H.264.
 - **Bitrate:** alvo de 5 Mbps em 1080p e 2,5 Mbps em 720p, ajustável **ao vivo** de 2,5 a 8 Mbps (até 12 Mbps se você aumentar `MAX_BITRATE_KBPS`).
@@ -413,7 +421,7 @@ Em ambos os casos:
   - mensagens por segundo e tamanho máximo de mensagem (64 KB);
   - bitrate máximo de entrada no servidor.
 - [ ] O WebSocket só aceita navegadores vindos das origens conhecidas (túnel, `PUBLIC_URL`, `WEB_URL`, localhost).
-- [ ] Só transmite quem tem o código, até `MAX_BROADCASTERS` ao mesmo tempo. Só vídeo: o servidor recusa áudio e dados, então ele não serve como retransmissor genérico.
+- [ ] Só transmite quem tem o código, até `MAX_BROADCASTERS` ao mesmo tempo. Cada pessoa envia no máximo uma tela (com áudio opcional) e uma câmera. O servidor recusa canais de dados e fluxos extras, então ele não serve como retransmissor genérico.
 - [ ] Não há credenciais permanentes. As credenciais TURN (se usar) são temporárias (6 h) e geradas por participante.
 - [ ] Compartilhe o link só com quem deve entrar. **Vazou? Apague a sala no painel**: todos são desconectados e o link morre.
 - [ ] Ao transmitir a "tela inteira", tudo nela aparece, inclusive notificações. Prefira compartilhar uma janela ou aba.

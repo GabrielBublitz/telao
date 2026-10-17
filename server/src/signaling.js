@@ -91,6 +91,7 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
       transports: new Map(),
       producer: null, // vídeo
       audioProducer: null,
+      cameraProducer: null, // câmera: independente da transmissão de tela
       protocol: 2,
       consumers: new Map(),
       msgWindowStart: Date.now(),
@@ -250,6 +251,19 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
         const room = requireRoom(peer);
         if (data.kind !== 'video' && data.kind !== 'audio') throw new SignalError('Tipo de mídia inválido.');
         const t = getTransport(peer, data.transportId, 'send');
+        if (data.source === 'camera') {
+          // Câmera: só vídeo, uma por pessoa; não conta no limite de transmissões nem na regra dos 720p.
+          if (data.kind !== 'video') throw new SignalError('A câmera envia só vídeo.');
+          if (peer.cameraProducer) throw new SignalError('Sua câmera já está ligada.');
+          const cam = await t.produce({ kind: 'video', rtpParameters: data.rtpParameters, appData: { peerId: peer.id, source: 'camera' } });
+          peer.cameraProducer = cam;
+          cam.on('transportclose', () => {
+            peer.cameraProducer = null;
+          });
+          log.info(`[sala ${room.id}] "${peer.nickname}" ligou a câmera.`);
+          broadcastState(room);
+          return { id: cam.id };
+        }
         if (data.kind === 'audio') {
           // Áudio só acompanha uma transmissão de tela (som do PC/aba), nunca sozinho.
           if (!peer.producer) throw new SignalError('Envie o vídeo antes do áudio.');
@@ -286,12 +300,18 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
         return {};
       }
 
+      case 'stopCamera': {
+        requireRoom(peer);
+        endCamera(peer);
+        return {};
+      }
+
       case 'consume': {
         const room = requireRoom(peer);
         let broadcaster = null;
         let producer = null;
         for (const p of room.peers.values()) {
-          for (const pr of [p.producer, p.audioProducer]) {
+          for (const pr of [p.producer, p.audioProducer, p.cameraProducer]) {
             if (pr && !pr.closed && pr.id === data.producerId) {
               broadcaster = p;
               producer = pr;
@@ -382,9 +402,20 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
     }
   }
 
+  function endCamera(peer) {
+    if (!peer.cameraProducer) return;
+    if (!peer.cameraProducer.closed) peer.cameraProducer.close(); // fecha a câmera para quem assiste
+    peer.cameraProducer = null;
+    if (peer.room) {
+      log.info(`[sala ${peer.room.id}] "${peer.nickname}" desligou a câmera.`);
+      broadcastState(peer.room);
+    }
+  }
+
   function leave(peer) {
     const room = peer.room;
     if (!room) return;
+    endCamera(peer);
     endBroadcast(peer);
     for (const t of peer.transports.values()) t.close();
     peer.transports.clear();
@@ -414,16 +445,21 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
         audioProducerId: p.audioProducer && !p.audioProducer.closed ? p.audioProducer.id : null,
         watchers: watchers.get(p.producer.id) ?? 0,
       }));
+    const cameras = [...room.peers.values()]
+      .filter((p) => p.cameraProducer && !p.cameraProducer.closed)
+      .map((p) => ({ peerId: p.id, nickname: p.nickname, producerId: p.cameraProducer.id, watchers: watchers.get(p.cameraProducer.id) ?? 0 }));
     return {
       peers: [...room.peers.values()].map((p) => ({
         id: p.id,
         nickname: p.nickname,
         broadcasting: room.broadcasters.has(p.id),
+        camera: !!(p.cameraProducer && !p.cameraProducer.closed),
         // "watching" (1º vídeo) mantém compatibilidade com a página v2; "watchingList" traz todos.
         watching: [...p.consumers.values()].find((c) => c.kind === 'video')?.producerId ?? null,
         watchingList: [...p.consumers.values()].filter((c) => c.kind === 'video').map((c) => c.producerId),
       })),
       broadcasters,
+      cameras,
       participantCount: rooms.participantCount(room),
       maxParticipants: rooms.maxViewers + 1,
       maxBroadcasters: rooms.maxBroadcasters,

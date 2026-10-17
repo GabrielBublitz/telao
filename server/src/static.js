@@ -19,7 +19,7 @@ export const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'X-Frame-Options': 'DENY',
-  'Permissions-Policy': 'display-capture=(self), camera=(), microphone=(), geolocation=()',
+  'Permissions-Policy': 'display-capture=(self), camera=(self), microphone=(), geolocation=()',
 };
 
 export function createStaticHandler(rootDir) {

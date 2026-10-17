@@ -6,7 +6,16 @@ import { Signaling, SignalError } from './signaling';
 import { MetricsTracker, type ReceiverMetrics, type SenderMetrics } from './stats';
 import { createSyntheticStream } from './synthetic';
 
-export type PeerInfo = { id: string; nickname: string; broadcasting: boolean; watching: string | null; watchingList?: string[] };
+export type PeerInfo = {
+  id: string;
+  nickname: string;
+  broadcasting: boolean;
+  camera?: boolean;
+  watching: string | null;
+  watchingList?: string[];
+};
+export type CameraInfo = { peerId: string; nickname: string; producerId: string; watchers: number };
+export type StreamSource = 'screen' | 'camera';
 export type BroadcasterInfo = {
   peerId: string;
   nickname: string;
@@ -17,6 +26,7 @@ export type BroadcasterInfo = {
 export type RoomState = {
   peers: PeerInfo[];
   broadcasters: BroadcasterInfo[];
+  cameras?: CameraInfo[]; // câmeras ligadas (independentes da transmissão de tela)
   participantCount: number;
   maxParticipants: number;
   maxBroadcasters: number;
@@ -51,6 +61,8 @@ export type LayerInfo = { current: number | null; temporal: number | null; count
 
 /** Uma transmissão de outra pessoa que estou assistindo (um quadro na grade). */
 export type WatchedStream = {
+  key: string; // pessoa + fonte (ver streamKey)
+  source: StreamSource;
   peerId: string;
   nickname: string;
   stream: MediaStream;
@@ -62,7 +74,7 @@ export type WatchedStream = {
 
 export type Metrics = {
   sender: SenderMetrics | null;
-  receivers: { peerId: string; nickname: string; metrics: ReceiverMetrics }[];
+  receivers: { key: string; peerId: string; source: StreamSource; nickname: string; metrics: ReceiverMetrics }[];
   /** Primeiro da lista (compatibilidade com os testes). */
   receiver: ReceiverMetrics | null;
 };
@@ -90,6 +102,10 @@ export type Snapshot = {
   sendState: string | null;
   viewers: ViewerQuality[];
   serverLayers: ServerLayer[];
+  // câmera própria
+  cameraOn: boolean;
+  cameraStarting: boolean;
+  cameraStream: MediaStream | null;
   // o que estou assistindo
   watched: WatchedStream[];
   recvState: string | null;
@@ -141,9 +157,47 @@ const initial: Snapshot = {
   sendState: null,
   viewers: [],
   serverLayers: [],
+  cameraOn: false,
+  cameraStarting: false,
+  cameraStream: null,
   watched: [],
   recvState: null,
 };
+
+/** Identifica um item assistível: a tela ou a câmera de uma pessoa. */
+export const streamKey = (peerId: string, source: StreamSource) => `${peerId}:${source}`;
+
+type StreamInfo = {
+  key: string;
+  peerId: string;
+  nickname: string;
+  source: StreamSource;
+  producerId: string;
+  audioProducerId: string | null;
+};
+
+/** Tudo que dá para assistir na sala: transmissões de tela e câmeras. */
+function streamsOf(state: RoomState | null | undefined): StreamInfo[] {
+  if (!state) return [];
+  return [
+    ...state.broadcasters.map((b) => ({
+      key: streamKey(b.peerId, 'screen'),
+      peerId: b.peerId,
+      nickname: b.nickname,
+      source: 'screen' as const,
+      producerId: b.producerId,
+      audioProducerId: b.audioProducerId,
+    })),
+    ...(state.cameras ?? []).map((c) => ({
+      key: streamKey(c.peerId, 'camera'),
+      peerId: c.peerId,
+      nickname: c.nickname,
+      source: 'camera' as const,
+      producerId: c.producerId,
+      audioProducerId: null,
+    })),
+  ];
+}
 
 export function wsUrlFor(signalOrigin: string) {
   const u = new URL(signalOrigin);
@@ -177,14 +231,17 @@ export class RoomSession {
   /** Consumidores abertos, por producerId (vídeo e áudio). */
   private consumers = new Map<string, types.Consumer>();
   private layerCounts = new Map<string, number>(); // consumerId -> nº de camadas
-  /** Transmissões que quero assistir (peerIds, na ordem da grade). */
+  /** O que quero assistir (chaves pessoa+fonte, na ordem da grade). */
   private wanted: string[] = [];
   /** Transmissões que fechei de propósito (producerId): não voltam sozinhas. */
   private dismissed = new Set<string>();
   /** Quem eu assistia antes de uma queda: volta assim que reaparecer (por até 45 s). */
-  private preferred: { nicknames: string[]; preview: boolean; until: number } | null = null;
+  private preferred: { items: { nickname: string; source: StreamSource }[]; preview: boolean; until: number } | null = null;
   /** Transmissão ativa (sobrevive a quedas de conexão para ser republicada sozinha). */
   private live: { stream: MediaStream; opts: BroadcastOptions; stopSynthetic: (() => void) | null } | null = null;
+  /** Câmera ligada (sobrevive a quedas de conexão para ser republicada sozinha). */
+  private camera: { stream: MediaStream } | null = null;
+  private cameraProducer: types.Producer | null = null;
   private appliedEncoding = '';
   private syncing = false;
   private syncQueued = false;
@@ -259,6 +316,7 @@ export class RoomSession {
     if (!this.healthTimer) this.healthTimer = setInterval(() => void this.healthCheck(), 3_000);
     // Voltou depois de uma queda com a captura ainda ativa: retoma a transmissão automaticamente.
     if (this.live) await this.publish();
+    if (this.camera) await this.publishCamera();
     this.applyRoomState(res.state);
   }
 
@@ -288,7 +346,7 @@ export class RoomSession {
     if (this.closed) return;
     // Lembra quem estava assistindo para restaurar a grade depois da reconexão (os IDs mudam).
     this.preferred = {
-      nicknames: this.snapshot.watched.map((w) => w.nickname),
+      items: this.snapshot.watched.map((w) => ({ nickname: w.nickname, source: w.source })),
       preview: this.snapshot.previewing,
       until: Date.now() + 45_000,
     };
@@ -360,15 +418,15 @@ export class RoomSession {
   /** Atualiza a lista do que assistir: remove quem saiu, restaura após queda, e assiste sozinho se estiver vazio. */
   private reconcileWanted(state: RoomState) {
     const me = this.snapshot.peerId;
-    const others = state.broadcasters.filter((b) => b.peerId !== me);
-    const wanted = this.wanted.filter((id) => others.some((b) => b.peerId === id));
+    const others = streamsOf(state).filter((x) => x.peerId !== me);
+    const wanted = this.wanted.filter((k) => others.some((x) => x.key === k));
     const pref = this.preferred;
     if (pref && Date.now() < pref.until) {
-      for (const nick of [...pref.nicknames]) {
-        const b = others.find((x) => x.nickname === nick);
-        if (b) {
-          if (!wanted.includes(b.peerId)) wanted.push(b.peerId);
-          pref.nicknames = pref.nicknames.filter((n) => n !== nick);
+      for (const item of [...pref.items]) {
+        const x = others.find((o) => o.nickname === item.nickname && o.source === item.source);
+        if (x) {
+          if (!wanted.includes(x.key)) wanted.push(x.key);
+          pref.items = pref.items.filter((i) => i !== item);
         }
       }
       if (pref.preview && this.snapshot.broadcasting) {
@@ -378,28 +436,33 @@ export class RoomSession {
     } else {
       this.preferred = null;
     }
-    // Sem nada na tela: começa a assistir a primeira transmissão que não foi fechada de propósito.
-    if (wanted.length === 0 && !(pref && pref.nicknames.length && Date.now() < pref.until)) {
-      const first = others.find((b) => !this.dismissed.has(b.producerId));
-      if (first) wanted.push(first.peerId);
+    const restoring = !!(pref && pref.items.length && Date.now() < pref.until);
+    // Nenhuma tela na grade: abre a primeira transmissão de tela que não foi fechada de propósito.
+    if (!restoring && !wanted.some((k) => k.endsWith(':screen'))) {
+      const first = others.find((x) => x.source === 'screen' && !this.dismissed.has(x.producerId));
+      if (first) wanted.push(first.key);
+    }
+    // Câmeras são leves: aparecem sozinhas, a não ser que tenham sido fechadas no ✕.
+    for (const x of others) {
+      if (x.source === 'camera' && !this.dismissed.has(x.producerId) && !wanted.includes(x.key)) wanted.push(x.key);
     }
     this.wanted = wanted;
   }
 
-  /** Adiciona uma transmissão à grade. */
-  watch(peerId: string) {
-    const b = this.snapshot.room?.broadcasters.find((x) => x.peerId === peerId);
-    if (!b || peerId === this.snapshot.peerId) return;
-    this.dismissed.delete(b.producerId);
-    if (!this.wanted.includes(peerId)) this.wanted = [...this.wanted, peerId];
+  /** Adiciona uma transmissão (tela ou câmera) à grade. */
+  watch(key: string) {
+    const x = streamsOf(this.snapshot.room).find((s) => s.key === key);
+    if (!x || x.peerId === this.snapshot.peerId) return;
+    this.dismissed.delete(x.producerId);
+    if (!this.wanted.includes(key)) this.wanted = [...this.wanted, key];
     void this.syncConsumers();
   }
 
-  /** Tira uma transmissão da grade (para de receber e de gastar banda com ela). */
-  unwatch(peerId: string) {
-    const b = this.snapshot.room?.broadcasters.find((x) => x.peerId === peerId);
-    if (b) this.dismissed.add(b.producerId);
-    this.wanted = this.wanted.filter((id) => id !== peerId);
+  /** Tira da grade (para de receber e de gastar banda com ela). */
+  unwatch(key: string) {
+    const x = streamsOf(this.snapshot.room).find((s) => s.key === key);
+    if (x) this.dismissed.add(x.producerId);
+    this.wanted = this.wanted.filter((k) => k !== key);
     void this.syncConsumers();
   }
 
@@ -449,8 +512,9 @@ export class RoomSession {
   private async ensureSendTransport() {
     if (!this.sendTransport || this.sendTransport.closed) {
       const t = await this.createTransport('send');
-      t.on('produce', ({ kind, rtpParameters }, callback, errback) => {
-        this.req<{ id: string }>('produce', { transportId: t.id, kind, rtpParameters })
+      t.on('produce', ({ kind, rtpParameters, appData }, callback, errback) => {
+        const source = (appData as { source?: string } | undefined)?.source;
+        this.req<{ id: string }>('produce', { transportId: t.id, kind, rtpParameters, source })
           .then(({ id }) => callback({ id }))
           .catch(errback);
       });
@@ -472,13 +536,13 @@ export class RoomSession {
       do {
         this.syncQueued = false;
         if (!this.device || this.snapshot.phase !== 'joined') break;
-        const broadcasters = this.snapshot.room?.broadcasters ?? [];
+        const streams = streamsOf(this.snapshot.room);
         const desired = new Set<string>();
-        for (const id of this.wanted) {
-          const b = broadcasters.find((x) => x.peerId === id);
-          if (!b) continue;
-          desired.add(b.producerId);
-          if (b.audioProducerId) desired.add(b.audioProducerId);
+        for (const k of this.wanted) {
+          const x = streams.find((s) => s.key === k);
+          if (!x) continue;
+          desired.add(x.producerId);
+          if (x.audioProducerId) desired.add(x.audioProducerId);
         }
         const toClose = [...this.consumers.keys()].filter((pid) => !desired.has(pid));
         for (const pid of toClose) this.dropConsumerFor(pid);
@@ -496,7 +560,7 @@ export class RoomSession {
         }
         this.rebuildWatched();
         if (failed) {
-          const stillWanted = (this.snapshot.room?.broadcasters ?? []).some((b) => this.wanted.includes(b.peerId));
+          const stillWanted = streams.some((x) => this.wanted.includes(x.key));
           if (stillWanted && this.syncRetries++ < 5) setTimeout(() => void this.syncConsumers(), 1500);
           else if (stillWanted) this.update({ error: `Não foi possível receber a transmissão: ${errText(failed)}` });
         } else {
@@ -588,22 +652,24 @@ export class RoomSession {
 
   /** Monta os quadros da grade a partir dos consumidores abertos (reaproveitando os já existentes). */
   private rebuildWatched() {
-    const broadcasters = this.snapshot.room?.broadcasters ?? [];
-    const prev = new Map(this.snapshot.watched.map((w) => [w.peerId, w]));
+    const streams = streamsOf(this.snapshot.room);
+    const prev = new Map(this.snapshot.watched.map((w) => [w.key, w]));
     const watched: WatchedStream[] = [];
-    for (const id of this.wanted) {
-      const b = broadcasters.find((x) => x.peerId === id);
-      const video = b && this.consumers.get(b.producerId);
-      if (!b || !video) continue;
-      const audio = b.audioProducerId ? this.consumers.get(b.audioProducerId) : undefined;
-      const old = prev.get(id);
+    for (const k of this.wanted) {
+      const x = streams.find((s) => s.key === k);
+      const video = x && this.consumers.get(x.producerId);
+      if (!x || !video) continue;
+      const audio = x.audioProducerId ? this.consumers.get(x.audioProducerId) : undefined;
+      const old = prev.get(k);
       const same = old && old.videoConsumerId === video.id && old.hasAudio === !!audio;
       watched.push(
         same
-          ? { ...old, nickname: b.nickname }
+          ? { ...old, nickname: x.nickname }
           : {
-              peerId: id,
-              nickname: b.nickname,
+              key: k,
+              source: x.source,
+              peerId: x.peerId,
+              nickname: x.nickname,
               stream: new MediaStream(audio ? [video.track, audio.track] : [video.track]),
               hasAudio: !!audio,
               videoConsumerId: video.id,
@@ -615,9 +681,77 @@ export class RoomSession {
     this.update({ watched, error: watched.length ? null : this.snapshot.error });
   }
 
-  requestKeyFrame(peerId: string) {
-    const w = this.snapshot.watched.find((x) => x.peerId === peerId);
+  requestKeyFrame(key: string) {
+    const w = this.snapshot.watched.find((x) => x.key === key);
     if (w) void this.req('requestKeyFrame', { consumerId: w.videoConsumerId }).catch(() => {});
+  }
+
+  // ---------- câmera ----------
+
+  /** Liga a câmera (independente da transmissão de tela). Só vídeo, em 640×360. */
+  async startCamera() {
+    if (this.snapshot.cameraOn || this.snapshot.cameraStarting) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      this.update({ error: 'Este navegador não permite usar a câmera.' });
+      return;
+    }
+    this.update({ cameraStarting: true, error: null });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30, max: 30 } },
+        audio: false,
+      });
+    } catch (e) {
+      const name = e instanceof DOMException ? e.name : '';
+      const msg =
+        name === 'NotAllowedError'
+          ? 'Permissão da câmera negada. Libere a câmera para este site no cadeado da barra de endereço.'
+          : name === 'NotFoundError'
+            ? 'Nenhuma câmera encontrada neste dispositivo.'
+            : name === 'NotReadableError'
+              ? 'A câmera está em uso por outro programa (ex.: Discord, Teams). Feche-o e tente de novo.'
+              : `Não foi possível ligar a câmera: ${errText(e)}`;
+      this.update({ cameraStarting: false, error: msg });
+      return;
+    }
+    stream.getVideoTracks()[0]?.addEventListener('ended', () => void this.stopCamera());
+    this.camera = { stream };
+    this.update({ cameraStream: stream });
+    await this.publishCamera();
+  }
+
+  /** Envia a câmera ao servidor (também usada para retomar após reconexão). */
+  private async publishCamera() {
+    const cam = this.camera;
+    if (!cam || !this.device) return false;
+    try {
+      const transport = await this.ensureSendTransport();
+      this.cameraProducer = await transport.produce({
+        track: cam.stream.getVideoTracks()[0],
+        encodings: [{ maxBitrate: 600_000, maxFramerate: 30 }],
+        codecOptions: { videoGoogleStartBitrate: 500 },
+        stopTracks: false,
+        appData: { source: 'camera' },
+      });
+      this.update({ cameraOn: true, cameraStarting: false });
+      return true;
+    } catch (e) {
+      for (const t of cam.stream.getTracks()) t.stop();
+      this.camera = null;
+      this.update({ cameraOn: false, cameraStarting: false, cameraStream: null, error: `Não foi possível ligar a câmera: ${errText(e)}` });
+      return false;
+    }
+  }
+
+  async stopCamera() {
+    if (!this.camera && !this.cameraProducer) return;
+    this.cameraProducer?.close();
+    this.cameraProducer = null;
+    for (const t of this.camera?.stream.getTracks() ?? []) t.stop();
+    this.camera = null;
+    this.update({ cameraOn: false, cameraStarting: false, cameraStream: null });
+    await this.req('stopCamera').catch(() => {});
   }
 
   // ---------- transmitir ----------
@@ -832,10 +966,13 @@ export class RoomSession {
   async getMetrics(): Promise<Metrics> {
     const sender = this.producer && !this.producer.closed ? this.tracker.sender(await this.producer.getStats()) : null;
     const receivers: Metrics['receivers'] = [];
+    const streams = streamsOf(this.snapshot.room);
     for (const w of this.snapshot.watched) {
-      const b = this.snapshot.room?.broadcasters.find((x) => x.peerId === w.peerId);
-      const c = b && this.consumers.get(b.producerId);
-      if (c && !c.closed) receivers.push({ peerId: w.peerId, nickname: w.nickname, metrics: this.tracker.receiver(await c.getStats()) });
+      const x = streams.find((s) => s.key === w.key);
+      const c = x && this.consumers.get(x.producerId);
+      if (c && !c.closed) {
+        receivers.push({ key: w.key, peerId: w.peerId, source: w.source, nickname: w.nickname, metrics: this.tracker.receiver(await c.getStats()) });
+      }
     }
     return { sender, receivers, receiver: receivers[0]?.metrics ?? null };
   }
@@ -843,6 +980,12 @@ export class RoomSession {
   // ---------- encerramento ----------
 
   private cleanupMedia({ keepCapture }: { keepCapture: boolean }) {
+    this.cameraProducer?.close();
+    this.cameraProducer = null;
+    if (!keepCapture && this.camera) {
+      for (const t of this.camera.stream.getTracks()) t.stop();
+      this.camera = null;
+    }
     this.audioProducer?.close();
     this.audioProducer = null;
     this.producer?.close();
@@ -859,6 +1002,9 @@ export class RoomSession {
       broadcasting: false,
       starting: false,
       sendingAudio: false,
+      cameraOn: false,
+      cameraStarting: false,
+      cameraStream: keepCapture ? this.snapshot.cameraStream : null,
       sendState: null,
       recvState: null,
       watched: [],

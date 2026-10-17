@@ -18,6 +18,15 @@ function ScreenIcon() {
   );
 }
 
+function CameraIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+      <path d="M16 10.5l6-3.5v10l-6-3.5z" />
+    </svg>
+  );
+}
+
 function GearIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -51,10 +60,12 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
   const maxKbps = s.bitrate?.maxKbps ?? 8000;
   const [opts, setOpts] = useState(loadOpts);
   const [canCapture, setCanCapture] = useState(true);
+  const [canCamera, setCanCamera] = useState(true);
   const settingsRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     setCanCapture(synthetic || !!navigator.mediaDevices?.getDisplayMedia);
+    setCanCamera(!!navigator.mediaDevices?.getUserMedia);
   }, [synthetic]);
 
   useEffect(() => {
@@ -82,15 +93,15 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
       )}
 
       {/* Botão e resolução lado a lado */}
-      <div className="row" style={{ flexWrap: 'nowrap' }}>
+      <div className="row control-row" style={{ flexWrap: 'nowrap' }}>
         {s.broadcasting ? (
-          <button className="danger" style={{ flex: 1 }} onClick={() => void session.stopBroadcast()} data-testid="stop">
+          <button className="danger" style={{ flex: 1, minWidth: 0 }} onClick={() => void session.stopBroadcast()} data-testid="stop">
             ■ Encerrar
           </button>
         ) : (
           <button
             className="btn-icon"
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 0 }}
             onClick={() => void session.startBroadcast({ ...opts, simulcast: true, bitrateKbps: bitrate, synthetic })}
             disabled={!canCapture || s.phase !== 'joined' || s.starting || full}
             data-testid="start"
@@ -114,6 +125,19 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
           <option value={1080}>1080p</option>
           <option value={720}>720p</option>
         </select>
+        {canCamera && (
+          <button
+            className={`icon-only${s.cameraOn ? '' : ' ghost'}`}
+            onClick={() => void (s.cameraOn ? session.stopCamera() : session.startCamera())}
+            disabled={s.phase !== 'joined' || s.cameraStarting}
+            title={s.cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+            aria-label={s.cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+            aria-pressed={s.cameraOn}
+            data-testid="camera"
+          >
+            <CameraIcon />
+          </button>
+        )}
         <button
           className="ghost icon-only"
           onClick={() => settingsRef.current?.showModal()}

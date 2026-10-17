@@ -23,7 +23,7 @@ function sustained(hist: Metrics[], bad: (m: Metrics) => boolean) {
 }
 
 const topLayer = (m: Metrics) => m.sender?.layers.at(-1) ?? null;
-const recvOf = (m: Metrics, peerId: string) => m.receivers.find((r) => r.peerId === peerId)?.metrics ?? null;
+const recvOf = (m: Metrics, key: string) => m.receivers.find((r) => r.key === key)?.metrics ?? null;
 
 type Warning = { cls: string; text: string };
 
@@ -84,17 +84,18 @@ export default function StatsPanel({ session, snapshot: s }: { session: RoomSess
     }
   }
   for (const w of s.watched) {
-    const r = recvOf(m ?? { sender: null, receivers: [], receiver: null }, w.peerId);
+    if (w.source === 'camera') continue; // câmera é leve e roda no FPS da webcam: não gera alertas
+    const r = recvOf(m ?? { sender: null, receivers: [], receiver: null }, w.key);
     if (w.layer.count > 1 && w.layer.current !== null && w.layer.current < w.layer.count - 1) {
       warnings.push({
         cls: 'warn',
         text: `${w.nickname}: você está recebendo a camada reduzida (metade da resolução) porque a conexão não comporta a qualidade máxima agora. Volta sozinha quando melhorar.`,
       });
     }
-    if (r && sustained(hist, (x) => (recvOf(x, w.peerId)?.packetLossPct ?? 0) > 2)) {
+    if (r && sustained(hist, (x) => (recvOf(x, w.key)?.packetLossPct ?? 0) > 2)) {
       warnings.push({ cls: 'warn', text: `${w.nickname}: perda de pacotes alta (${r.packetLossPct}%). Pode haver travamentos.` });
     }
-    if (r && sustained(hist, (x) => (recvOf(x, w.peerId)?.fps ?? TARGET_FPS) < LOW_FPS)) {
+    if (r && sustained(hist, (x) => (recvOf(x, w.key)?.fps ?? TARGET_FPS) < LOW_FPS)) {
       warnings.push({ cls: 'warn', text: `${w.nickname}: FPS recebido abaixo da meta (${v(r.fps)} de ${TARGET_FPS}).` });
     }
   }
@@ -157,12 +158,12 @@ export default function StatsPanel({ session, snapshot: s }: { session: RoomSess
 
       {open &&
         receivers.map((r) => {
-          const w = s.watched.find((x) => x.peerId === r.peerId);
+          const w = s.watched.find((x) => x.key === r.key);
           // Dados avançados só para quem transmite; quem só assiste vê o essencial.
           return (
             <ReceiverBlock
-              key={r.peerId}
-              title={receivers.length > 1 || both ? `Assistindo ${r.nickname}` : null}
+              key={r.key}
+              title={receivers.length > 1 || both ? `Assistindo ${r.source === 'camera' ? 'a câmera de ' : ''}${r.nickname}` : null}
               r={r.metrics}
               w={w}
               advanced={s.broadcasting}
