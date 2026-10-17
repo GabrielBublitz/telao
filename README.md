@@ -322,7 +322,29 @@ Nesses casos o teste **reprova, de propósito**: o critério é rígido. A causa
 
 ---
 
-## 10. Atualizar sem derrubar ninguém
+## 10. Instalador para o PC de um amigo (modo direto, sem playit)
+
+Para outra pessoa hospedar o Telão no PC dela (Windows 10/11 64 bits), sem playit e usando o IP de internet dela:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\gerar-instalador.ps1
+```
+
+Isso gera **`dist\Telao-Instalador.exe`** (~57 MB), com o app inteiro embutido. Mande o arquivo para a pessoa. Ela dá dois cliques e:
+- **Instala** em `%LOCALAPPDATA%\Programs\Telao`. Não pede administrador para os arquivos.
+- **Grava a configuração do modo direto:** porta 40000, `MEDIA_UPNP=auto` e salas de 7 dias. A sua configuração do playit e as suas salas **não** vão no instalador.
+- **Libera o `node.exe` do Telão no Firewall do Windows.** O Windows pede permissão de administrador uma vez.
+- **Cria atalhos** na Área de Trabalho e no menu Iniciar, pergunta se deve iniciar com o Windows e registra o desinstalador em Configurações > Aplicativos.
+- **Rodar de novo atualiza** o app e mantém as salas e a configuração.
+
+**Porta no roteador:** com `MEDIA_UPNP=auto`, o servidor pede ao roteador (UPnP) para abrir UDP e TCP 40000 sozinho, renova enquanto estiver no ar e fecha ao desligar. O painel mostra o resultado na linha "Roteador (UPnP)":
+- **portas abertas automaticamente:** pronto.
+- **sem UPnP / não abriu:** abra manualmente no roteador UDP e TCP 40000 para o PC.
+- **CGNAT:** o roteador recebe um IP privado (100.64.x.x, 10.x.x.x…) e conexões de fora não chegam. O modo direto não funciona nessa internet: use o playit ou peça um IP público à operadora.
+
+O Windows pode mostrar "O Windows protegeu o computador" porque o instalador não tem assinatura digital, que é paga. Basta clicar em **Mais informações → Executar assim mesmo**.
+
+## 11. Atualizar sem derrubar ninguém
 
 - **As salas ficam salvas** em `server/.data/rooms.json`, então os links continuam válidos depois de reiniciar o servidor.
 - **O túnel HTTPS roda separado do servidor** (`server/.data/tunnel.json`), então a URL não muda ao reiniciar o servidor. Ela só muda se o próprio `cloudflared` cair, ou depois de `scripts\stop.ps1`.
@@ -340,7 +362,7 @@ Nesses casos o teste **reprova, de propósito**: o critério é rígido. A causa
   powershell -ExecutionPolicy Bypass -File scripts\stop.ps1
   ```
 
-## 11. Depois de reiniciar o computador
+## 12. Depois de reiniciar o computador
 
 **Manual:** rode `scripts\start.ps1` (seção 5), crie a sala e envie o link novo.
 
@@ -358,7 +380,7 @@ Em ambos os casos:
 
 ---
 
-## 12. Diagnóstico de problemas
+## 13. Diagnóstico de problemas
 
 | Sintoma | Causa provável | O que fazer |
 |---|---|---|
@@ -380,7 +402,7 @@ Em ambos os casos:
 
 ---
 
-## 13. Checklist de segurança
+## 14. Checklist de segurança
 
 - [ ] O painel admin (`3002`) escuta só em `127.0.0.1`, recusa `Host` estranho (DNS rebinding) e POST de outras origens (CSRF). **Nunca** encaminhe a 3002 no roteador.
 - [ ] Encaminhe **somente** UDP/TCP 40000, e nunca 3001 ou 3002. O site sai pelo túnel.
@@ -399,7 +421,7 @@ Em ambos os casos:
 
 ---
 
-## 14. Por que não Docker Compose?
+## 15. Por que não Docker Compose?
 
 No Windows, o Docker Desktop roda os contêineres numa VM com NAT própria. Para o mediasoup, isso significa:
 - mais uma camada de NAT para o UDP;
@@ -410,7 +432,7 @@ Rodar o Node nativamente é mais simples e mais confiável aqui: o worker do med
 
 ---
 
-## 15. Dados sensíveis e o git
+## 16. Dados sensíveis e o git
 
 O README e os guias citam IPs e o endereço do túnel desta instalação. Para que **nada disso vá para o repositório**, um filtro do git troca esses valores por marcadores ao commitar, como `<SEU_IP_PUBLICO>`, `<IP_LOCAL_DO_PC>`, `<IP_DO_ROTEADOR>`, `<ENDERECO_DO_TUNEL_PLAYIT>`, `<IP_DO_TUNEL_PLAYIT>` e `<PORTA_DO_TUNEL_PLAYIT>`. No seu PC, os arquivos continuam com os valores reais.
 
@@ -420,7 +442,7 @@ O README e os guias citam IPs e o endereço do túnel desta instalação. Para q
 - **Como funciona:** o filtro está em `scripts/git-sensitive-filter.mjs` e é aplicado pelo `.gitattributes`. Imagens não passam por ele, então capturas de tela nunca devem mostrar IPs reais.
 - **Configuração de verdade** (`server/.env`) e salas (`server/.data/`) já ficam fora do git pelo `.gitignore`.
 
-## 16. Estrutura de pastas
+## 17. Estrutura de pastas
 
 ```
 telao/
@@ -431,7 +453,7 @@ telao/
 │   ├── install-startup.ps1   # iniciar com o Windows
 │   └── stop.ps1              # desliga servidor + túnel
 ├── Telao.exe                 # lançador (duplo clique)
-├── launcher/                 # código e ícone do Telao.exe (build.cmd)
+├── launcher/                 # Telao.exe (lançador) e Instalador.cs (instalador/desinstalador)
 ├── runtime/                  # node.exe + cloudflared.exe embutidos (fora do git)
 ├── server/                   # Node.js: sinalização + SFU mediasoup + painel
 │   ├── .env.example

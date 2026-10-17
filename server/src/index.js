@@ -9,6 +9,8 @@ import { createSignaling } from './signaling.js';
 import { createStaticHandler, SECURITY_HEADERS } from './static.js';
 import { startAdmin } from './admin.js';
 import { startQuickTunnel } from './tunnel.js';
+import { openMediaPorts } from './upnp.js';
+import { isPrivateOrCgnat } from './net.js';
 
 const ts = () => new Date().toLocaleTimeString('pt-BR');
 const log = {
@@ -17,7 +19,13 @@ const log = {
   error: (...a) => console.error(ts(), '✖', ...a),
 };
 
-const media = await createMedia(config, log);
+let media;
+try {
+  media = await createMedia(config, log);
+} catch (err) {
+  log.error(`[mídia] ${err.message}`);
+  process.exit(1);
+}
 const rooms = new RoomManager({
   maxRooms: config.maxRooms,
   maxViewers: config.maxViewers,
@@ -81,8 +89,35 @@ function roomView(room) {
   };
 }
 
+// Modo direto: pede ao roteador para abrir as portas de mídia (UPnP) e detecta CGNAT.
+let upnp = { status: config.mediaUpnp === 'auto' ? 'verificando' : 'desligado', externalIp: null, error: null, close: async () => {} };
+if (config.mediaUpnp === 'auto') {
+  openMediaPorts({
+    lanIp: media.info.lanIp,
+    ports: [
+      { protocol: 'UDP', port: config.mediaUdpPort },
+      { protocol: 'TCP', port: config.mediaTcpPort },
+    ],
+    log,
+  }).then((r) => {
+    upnp = r;
+    if (r.error) log.warn(`[upnp] ${r.error}`);
+  });
+}
+
 function getStatus() {
   const warnings = [...media.info.warnings];
+  const ports = `UDP ${config.mediaUdpPort} e TCP ${config.mediaTcpPort}`;
+  if (upnp.status === 'cgnat') warnings.push(upnp.error);
+  else if (upnp.status === 'falhou' || upnp.status === 'indisponivel') {
+    warnings.push(`${upnp.error} Abra manualmente no roteador: ${ports} → ${media.info.lanIp}.`);
+  }
+  if (upnp.status === 'ok' && upnp.externalIp && media.info.publicIp && upnp.externalIp !== media.info.publicIp && !isPrivateOrCgnat(upnp.externalIp)) {
+    warnings.push(
+      `O roteador diz que o IP de internet é ${upnp.externalIp}, mas a internet vê ${media.info.publicIp}: há outro roteador/modem na frente. ` +
+        `Abra ${ports} também nele (ou coloque o modem em modo bridge).`,
+    );
+  }
   if (!publicBase()) {
     warnings.push(
       config.tunnel === 'cloudflared'
@@ -90,11 +125,11 @@ function getStatus() {
         : 'Nenhuma URL pública: defina PUBLIC_URL ou use TUNNEL=cloudflared.',
     );
   }
-  if (config.httpHost === '127.0.0.1') warnings.push('HTTP_HOST=127.0.0.1: outras máquinas da rede local não abrem o site direto (só pelo túnel).');
   return {
     publicUrl: publicBase() || null,
     webBase: webBase() || null,
     media: media.info,
+    upnp: { status: upnp.status, externalIp: upnp.externalIp },
     warnings,
   };
 }
@@ -142,10 +177,12 @@ log.info(`[mídia] IP local ${m.lanIp} · público ${m.publicIp ?? '?'} · anunc
 log.info(`[mídia] Portas: UDP ${m.udpPort} / TCP ${m.tcpPort}  (encaminhe no roteador para ${m.lanIp})`);
 for (const w of m.warnings) log.warn(`[mídia] ${w}`);
 
-function shutdown() {
+async function shutdown() {
   // O túnel continua rodando de propósito: ao reiniciar, a URL é a mesma. Para derrubar tudo: scripts\stop.ps1
   log.info('Encerrando...');
   saveRooms();
+  // Fecha as portas abertas no roteador (no máximo 3 s de espera).
+  await Promise.race([upnp.close(), new Promise((r) => setTimeout(r, 3000))]);
   media.worker.close();
   process.exit(0);
 }

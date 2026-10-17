@@ -75,6 +75,8 @@ export const config = {
   mediaAnnouncedAddress: str('MEDIA_ANNOUNCED_ADDRESS', 'auto'),
   // "auto" = também escutar no IPv6 global (útil sob CGNAT, se o provedor entrega IPv6). "off" = desligado.
   mediaIpv6: str('MEDIA_IPV6', 'auto'),
+  // "auto" = pede ao roteador (UPnP) para abrir as portas de mídia sozinho. Para o modo direto, sem playit.
+  mediaUpnp: str('MEDIA_UPNP', 'off'),
 
   // ICE servers enviados ao navegador. STUN é opcional para este desenho (o SFU tem endereço público).
   stunUrls: list('STUN_URLS').length ? list('STUN_URLS') : ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'],
@@ -97,6 +99,9 @@ export const config = {
 
 if (!['cloudflared', 'none'].includes(config.tunnel)) {
   throw new Error('TUNNEL deve ser "cloudflared" ou "none".');
+}
+if (!['auto', 'off'].includes(config.mediaUpnp)) {
+  throw new Error('MEDIA_UPNP deve ser "auto" ou "off".');
 }
 if (!['auto', 'off'].includes(config.mediaIpv6)) {
   throw new Error('MEDIA_IPV6 deve ser "auto" ou "off".');

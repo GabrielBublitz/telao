@@ -78,6 +78,13 @@ export async function createMedia(config, log) {
   try {
     webRtcServer = await worker.createWebRtcServer({ listenInfos: buildListenInfos(config, lanIp, announced, ipv6) });
   } catch (err) {
+    if (/address already in use/i.test(err.message)) {
+      worker.close();
+      throw new Error(
+        `A porta de vídeo (UDP ${config.mediaUdpPort} / TCP ${config.mediaTcpPort}) já está em uso neste PC. ` +
+          'Feche o outro programa (ou outro Telão aberto) que a usa, ou troque MEDIA_UDP_PORT/MEDIA_TCP_PORT no arquivo server/.env.',
+      );
+    }
     if (!ipv6) throw err;
     log.warn(`[mídia] Falha ao escutar no IPv6 ${ipv6} (${err.message}). Continuando só com IPv4.`);
     ipv6 = null;

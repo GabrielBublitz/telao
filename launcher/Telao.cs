@@ -58,7 +58,17 @@ class Telao
         }
 
         Banner();
-        EnsurePlayit();
+        // Modo playit: o .env anuncia um endereço fixo (o do túnel). Modo direto (auto/UPnP): não precisa do playit.
+        string announced = ReadEnv("MEDIA_ANNOUNCED_ADDRESS");
+        if (announced != null && announced != "auto" && announced != "none")
+        {
+            EnsurePlayit();
+        }
+        else
+        {
+            Console.WriteLine("Modo direto: o vídeo chega pelo IP de internet deste PC (sem playit).");
+            Console.WriteLine();
+        }
 
         ctrlHandler = OnConsoleClose;
         SetConsoleCtrlHandler(ctrlHandler, true);
@@ -93,6 +103,22 @@ class Telao
         }
         StopTunnel();
         return 0;
+    }
+
+    /// Lê um valor do server\.env (sem processar aspas nem variáveis; o .env do Telão é simples).
+    static string ReadEnv(string key)
+    {
+        try
+        {
+            foreach (string line in File.ReadAllLines(Path.Combine(serverDir, ".env")))
+            {
+                string t = line.Trim();
+                if (t.StartsWith("#") || !t.StartsWith(key + "=")) continue;
+                return t.Substring(key.Length + 1).Trim();
+            }
+        }
+        catch { }
+        return null;
     }
 
     static void Banner()
