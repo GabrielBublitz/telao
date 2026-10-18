@@ -38,6 +38,17 @@ test('sala expira após o TTL', () => {
   assert.deepEqual(m.expired().map((x) => x.id), [r.id]);
 });
 
+test('renovar reinicia o prazo da sala', () => {
+  const { m, clock } = manager();
+  const r = m.create();
+  clock.advance(50_000);
+  assert.equal(m.renew(r.id), r);
+  clock.advance(50_000); // passaria do prazo original
+  assert.equal(m.verify(r.id, r.key), r);
+  assert.deepEqual(m.expired(), []);
+  assert.equal(m.renew('inexistente'), null);
+});
+
 test('limite de salas', () => {
   const { m } = manager();
   m.create();

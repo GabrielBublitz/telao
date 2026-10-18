@@ -401,7 +401,7 @@ Em ambos os casos:
 | `start.ps1` diz que o Node é antigo | Node 20 ativo | `nvm use 22.23.3` (seção 4.1) |
 | O painel mostra "Aguardando o túnel HTTPS" | cloudflared não instalado ou sem internet | Instale (4.2); veja `[túnel]` no console |
 | Amigo vê erro de certificado ou a página não abre | URL antiga (o túnel reiniciou) | Pegue o link novo no painel |
-| "Sala não encontrada, expirada ou código inválido" | Link incompleto, sala apagada ou expirada (12 h), servidor reiniciado | Crie a sala de novo |
+| "Sala não encontrada, expirada ou código inválido" | Link incompleto, sala apagada ou expirada (12 h), servidor reiniciado | Crie a sala de novo. Para não expirar, use **Renovar** no painel (reinicia o prazo sem derrubar ninguém) |
 | "Muitas tentativas" | 8 erros de código em 10 min vindos do mesmo IP | Espere 10 min |
 | Rede local ok, de fora não ("Falha na mídia") | Porta 40000 sem encaminhamento, firewall ou CGNAT | Seções 3, 4.4 e 7; `npm run diagnose` |
 | Caminho mostra `TCP` | UDP bloqueado na rede do espectador ou no roteador | Confirme o encaminhamento de UDP 40000; funciona, mas com mais atraso |

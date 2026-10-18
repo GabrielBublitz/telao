@@ -56,6 +56,14 @@ export function startAdmin({ port, rooms, getStatus, roomView, closeRoom, onChan
         onChange();
         return json(res, 201, roomView(room));
       }
+      const renewMatch = /^\/api\/rooms\/([a-z0-9]+)\/renew$/.exec(pathname);
+      if (req.method === 'POST' && renewMatch) {
+        const room = rooms.renew(renewMatch[1]);
+        if (!room) return json(res, 404, { error: 'Sala não encontrada' });
+        log.info(`[admin] Sala renovada: ${room.id} (expira ${new Date(room.expiresAt).toLocaleString()})`);
+        onChange();
+        return json(res, 200, roomView(room));
+      }
       const m = /^\/api\/rooms\/([a-z0-9]+)$/.exec(pathname);
       if (req.method === 'DELETE' && m) {
         const room = rooms.delete(m[1]);
@@ -122,10 +130,12 @@ async function refresh(){
     '<div class="mut">Link para transmitir deste computador:</div><code>'+esc(r.localLink)+'</code>'+
     '<div class="row">'+(r.publicLink?'<button data-copy="'+esc(r.publicLink)+'">Copiar link dos amigos</button>':'')+
     '<a href="'+esc(r.localLink)+'" target="_blank" rel="noopener"><button class="ghost">Abrir para transmitir</button></a>'+
+    '<button class="ghost" data-renew="'+esc(r.id)+'" title="Reinicia o prazo da sala sem desconectar ninguém">Renovar (+'+s.roomTtlHours+' h)</button>'+
     '<button class="danger" data-del="'+esc(r.id)+'">Apagar sala</button></div></div>').join(''):'<p class="mut">Nenhuma sala. Crie uma acima.</p>';
 }
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
   if(b.dataset.copy)copy(b.dataset.copy,b);
+  if(b.dataset.renew){try{await api('POST','/api/rooms/'+b.dataset.renew+'/renew');b.textContent='Renovada ✓';setTimeout(refresh,1200)}catch(err){alert(err.message)}}
   if(b.dataset.del&&confirm('Apagar a sala e desconectar todos?')){await api('DELETE','/api/rooms/'+b.dataset.del);refresh()}});
 $('#create').onclick=async()=>{try{await api('POST','/api/rooms',{name:$('#name').value});$('#name').value='';refresh()}catch(e){alert(e.message)}};
 refresh();setInterval(refresh,3000);

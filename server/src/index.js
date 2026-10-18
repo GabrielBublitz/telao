@@ -130,6 +130,7 @@ function getStatus() {
     webBase: webBase() || null,
     media: media.info,
     upnp: { status: upnp.status, externalIp: upnp.externalIp },
+    roomTtlHours: config.roomTtlHours,
     warnings,
   };
 }

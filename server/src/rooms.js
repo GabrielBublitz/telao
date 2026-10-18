@@ -97,6 +97,13 @@ export class RoomManager {
     return room;
   }
 
+  /** Reinicia o prazo da sala (agora + ROOM_TTL_HOURS), sem derrubar ninguém. Retorna a sala ou null. */
+  renew(id) {
+    const room = this.rooms.get(id) ?? null;
+    if (room) room.expiresAt = this.now() + this.ttlMs;
+    return room;
+  }
+
   delete(id) {
     const room = this.rooms.get(id) ?? null;
     this.rooms.delete(id);
