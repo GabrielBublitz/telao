@@ -54,6 +54,12 @@ Outros detalhes:
 - A interface avisa quando a transmissão saiu sem som ou com o som do PC inteiro.
 - Quem assiste ouve pelo próprio quadro, com mudo e volume. Se o navegador bloquear o som automático, aparece o botão **"🔊 Clique para ouvir"**.
 
+### Trocar de tela sem encerrar
+Durante a transmissão, o botão **Trocar tela** abre o seletor de novo para escolher outra tela, janela ou aba, como no Discord.
+- Quem assiste continua na mesma transmissão, sem piscar nem precisar clicar em nada.
+- O áudio acompanha a nova escolha: se a nova fonte não tiver som, só o áudio para e o vídeo segue.
+- Cancelar o seletor mantém a tela atual.
+
 ### Câmera
 O botão 📷 ao lado de **Transmitir** liga a webcam, com ou sem transmitir a tela.
 - Só vídeo, sem microfone: a voz continua no Discord. Vai em 640×360 a 30 fps, até 600 kbps, então pesa pouco.

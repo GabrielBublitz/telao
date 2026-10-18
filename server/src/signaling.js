@@ -306,6 +306,17 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
         return {};
       }
 
+      case 'stopAudio': {
+        // Trocou para uma tela/janela sem som: a transmissão continua, só o áudio para.
+        const room = requireRoom(peer);
+        if (peer.audioProducer) {
+          if (!peer.audioProducer.closed) peer.audioProducer.close();
+          peer.audioProducer = null;
+          broadcastState(room);
+        }
+        return {};
+      }
+
       case 'consume': {
         const room = requireRoom(peer);
         let broadcaster = null;

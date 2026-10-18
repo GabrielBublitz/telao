@@ -390,6 +390,10 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  white-space: nowrap;
+}
+.btn-icon svg {
+  flex: none;
 }
 button.icon-only {
   display: inline-grid;

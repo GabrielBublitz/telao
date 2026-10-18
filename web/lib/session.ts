@@ -92,6 +92,8 @@ export type Snapshot = {
   bitrate: { defaultKbps: number; maxKbps: number } | null;
   // transmissão própria
   starting: boolean;
+  /** Seletor aberto para trocar a tela durante a transmissão. */
+  switching: boolean;
   broadcasting: boolean;
   sendingAudio: boolean;
   localStream: MediaStream | null;
@@ -109,6 +111,13 @@ export type Snapshot = {
   // o que estou assistindo
   watched: WatchedStream[];
   recvState: string | null;
+};
+
+type Capture = {
+  stream: MediaStream;
+  stopSynthetic: (() => void) | null;
+  settings: MediaTrackSettings & { displaySurface?: string };
+  audioNotice: string | null;
 };
 
 type JoinResponse = {
@@ -147,6 +156,7 @@ const initial: Snapshot = {
   room: null,
   bitrate: null,
   starting: false,
+  switching: false,
   broadcasting: false,
   sendingAudio: false,
   localStream: null,
@@ -239,6 +249,7 @@ export class RoomSession {
   private preferred: { items: { nickname: string; source: StreamSource }[]; preview: boolean; until: number } | null = null;
   /** Transmissão ativa (sobrevive a quedas de conexão para ser republicada sozinha). */
   private live: { stream: MediaStream; opts: BroadcastOptions; stopSynthetic: (() => void) | null } | null = null;
+  private switching = false;
   /** Câmera ligada (sobrevive a quedas de conexão para ser republicada sozinha). */
   private camera: { stream: MediaStream } | null = null;
   private cameraProducer: types.Producer | null = null;
@@ -768,6 +779,85 @@ export class RoomSession {
       return;
     }
     this.update({ starting: true, error: null, notice: null });
+    let cap: Capture | null;
+    try {
+      cap = await this.capture(opts);
+    } catch (e) {
+      this.update({ starting: false, error: `Não foi possível capturar a tela: ${errText(e)}` });
+      return;
+    }
+    if (!cap) {
+      this.update({ starting: false });
+      return;
+    }
+    this.useCapture(cap, opts);
+    const ok = await this.publish();
+    if (ok && cap.audioNotice) this.update({ notice: cap.audioNotice });
+  }
+
+  /**
+   * Troca a tela/janela/aba compartilhada sem encerrar a transmissão (como no Discord):
+   * captura a nova fonte e substitui as trilhas nos produtores atuais, sem renegociar com o servidor.
+   */
+  async switchScreen() {
+    const live = this.live;
+    if (!live || !this.producer || this.snapshot.starting || this.switching) return;
+    this.switching = true;
+    this.update({ switching: true });
+    try {
+      let cap: Capture | null;
+      try {
+        cap = await this.capture(live.opts);
+      } catch (e) {
+        this.update({ error: `Não foi possível trocar a tela: ${errText(e)}` });
+        return;
+      }
+      // Cancelou o seletor ou a transmissão acabou enquanto ele estava aberto: segue tudo como estava.
+      if (!cap || this.live !== live || !this.producer || this.producer.closed) {
+        cap?.stopSynthetic?.();
+        for (const t of cap?.stream.getTracks() ?? []) t.stop();
+        return;
+      }
+      const video = cap.stream.getVideoTracks()[0];
+      const audio = cap.stream.getAudioTracks()[0];
+      try {
+        await this.producer.replaceTrack({ track: video });
+        if (audio && this.audioProducer && !this.audioProducer.closed) {
+          await this.audioProducer.replaceTrack({ track: audio });
+        } else if (audio) {
+          const transport = await this.ensureSendTransport();
+          this.audioProducer = await transport.produce({
+            track: audio,
+            codecOptions: { opusStereo: true, opusFec: true, opusMaxAverageBitrate: 128_000 },
+            stopTracks: false,
+          });
+        } else if (this.audioProducer) {
+          this.audioProducer.close();
+          this.audioProducer = null;
+          await this.req('stopAudio').catch(() => {});
+        }
+      } catch (e) {
+        cap.stopSynthetic?.();
+        for (const t of cap.stream.getTracks()) t.stop();
+        this.update({ error: `Não foi possível trocar a tela: ${errText(e)}` });
+        return;
+      }
+      // A captura antiga só para depois que a nova já está no ar (sem tela preta no meio).
+      live.stopSynthetic?.();
+      for (const t of live.stream.getTracks()) t.stop();
+      this.useCapture(cap, live.opts);
+      this.update({ sendingAudio: !!this.audioProducer, notice: cap.audioNotice, error: null });
+      // A nova fonte pode ter outro tamanho: recalcula a escala do codificador.
+      this.appliedEncoding = '';
+      await this.applyCap();
+    } finally {
+      this.switching = false;
+      this.update({ switching: false });
+    }
+  }
+
+  /** Pede a tela ao navegador (ou cria a fonte sintética). null = a pessoa cancelou o seletor. */
+  private async capture(opts: BroadcastOptions): Promise<Capture | null> {
     const dims = opts.resolution === 720 ? { width: 1280, height: 720 } : { width: 1920, height: 1080 };
 
     let stream: MediaStream;
@@ -798,17 +888,18 @@ export class RoomSession {
         } as DisplayMediaStreamOptions);
       }
     } catch (e) {
-      const cancelled = e instanceof DOMException && e.name === 'NotAllowedError';
-      this.update({ starting: false, error: cancelled ? null : `Não foi possível capturar a tela: ${errText(e)}` });
-      return;
+      if (e instanceof DOMException && e.name === 'NotAllowedError') return null;
+      throw e;
     }
 
     const track = stream.getVideoTracks()[0];
     // "detail" preserva nitidez (texto/código); "motion" preserva fluidez (jogos/vídeo).
     track.contentHint = opts.contentHint;
-    // Fechar pelo botão "Parar de compartilhar" do navegador encerra a transmissão.
-    track.addEventListener('ended', () => void this.stopBroadcast('A captura foi encerrada pelo navegador ("Parar de compartilhar").'));
-    this.live = { stream, opts, stopSynthetic };
+    // Fechar pelo botão "Parar de compartilhar" do navegador encerra a transmissão
+    // (só se ainda for a captura em uso: a antiga, trocada por outra tela, não conta).
+    track.addEventListener('ended', () => {
+      if (this.live?.stream === stream) void this.stopBroadcast('A captura foi encerrada pelo navegador ("Parar de compartilhar").');
+    });
     const st = track.getSettings() as MediaTrackSettings & { displaySurface?: string };
     const surface = st.displaySurface ?? null; // browser = aba · window = janela · monitor = tela inteira
     // No modo "só a aba", nunca enviar áudio que não seja de uma aba (garantia extra além do systemAudio).
@@ -838,8 +929,15 @@ export class RoomSession {
         audioNotice = 'Transmitindo sem áudio: no seletor, marque "Compartilhar áudio da guia" para o som ir junto.';
       }
     }
+    return { stream, stopSynthetic, settings: st, audioNotice };
+  }
+
+  /** Passa a usar a captura como a transmissão atual (prévia e estatísticas incluídas). */
+  private useCapture(cap: Capture, opts: BroadcastOptions) {
+    const st = cap.settings;
+    this.live = { stream: cap.stream, opts, stopSynthetic: cap.stopSynthetic };
     this.update({
-      localStream: stream,
+      localStream: cap.stream,
       capture: {
         width: st.width ?? null,
         height: st.height ?? null,
@@ -847,8 +945,6 @@ export class RoomSession {
         surface: st.displaySurface ?? (opts.synthetic ? 'sintética' : null),
       },
     });
-    const ok = await this.publish();
-    if (ok && audioNotice) this.update({ notice: audioNotice });
   }
 
   /** Envia a captura atual ao servidor (também usada para retomar após reconexão). */

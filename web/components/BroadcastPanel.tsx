@@ -106,9 +106,23 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
       {/* Botão e resolução lado a lado */}
       <div className="row control-row" style={{ flexWrap: 'nowrap' }}>
         {s.broadcasting ? (
-          <button className="danger" style={{ flex: 1, minWidth: 0 }} onClick={() => void session.stopBroadcast()} data-testid="stop">
-            ■ Encerrar
-          </button>
+          <>
+            {/* Trocar a tela sem encerrar: quem assiste continua na mesma transmissão. */}
+            <button
+              className="btn-icon"
+              style={{ flex: 1, minWidth: 0 }}
+              onClick={() => void session.switchScreen()}
+              disabled={s.switching}
+              title="Escolher outra tela, janela ou aba sem encerrar a transmissão"
+              data-testid="switch"
+            >
+              <ScreenIcon />
+              {s.switching ? 'Escolhendo…' : 'Trocar tela'}
+            </button>
+            <button className="danger" style={{ flex: 'none' }} onClick={() => void session.stopBroadcast()} data-testid="stop">
+              ■ Encerrar
+            </button>
+          </>
         ) : (
           <button
             className="btn-icon"
@@ -121,12 +135,13 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
             {s.starting ? 'Escolhendo…' : 'Transmitir'}
           </button>
         )}
+        {/* Durante a transmissão a resolução não muda; o espaço vai para o "Trocar tela". */}
         <select
           aria-label="Resolução"
           title="Resolução"
           style={{ width: 'auto', flex: 'none' }}
           value={opts.resolution}
-          disabled={s.broadcasting}
+          hidden={s.broadcasting}
           onChange={(e) => {
             const resolution = Number(e.target.value) as 720 | 1080;
             setOpts({ ...opts, resolution, bitrateKbps: RECOMMENDED[resolution] });
