@@ -74,7 +74,8 @@ O botão 📷 ao lado de **Transmitir** liga a webcam, com ou sem transmitir a t
 - **Adaptação por espectador (simulcast):** o transmissor envia a camada principal e uma camada reserva com metade da resolução (540p no modo 1080p, 360p no modo 720p). O servidor escolhe para cada espectador a camada que cabe na conexão dele, com base na estimativa de banda (transport-cc).
 - **Nada é reduzido em silêncio.** O espectador vê o aviso *"recebendo a camada reduzida (≈540p)"*, e o transmissor vê quem está em 540p e por quê. Se o navegador do transmissor reduzir a qualidade por CPU ou banda (`qualityLimitationReason`), isso também aparece.
 - **Métricas na tela:** resolução, FPS, bitrate, perda de pacotes, jitter, RTT, codec, camada, quadros perdidos e o caminho de rede (UDP/TCP, direto/TURN).
-- **Prioridade:** escolha entre *Nitidez* (texto e código; o navegador mantém a resolução) e *Fluidez* (jogos; mantém o FPS).
+- **Prioridade:** escolha entre *Nitidez* (texto e código; o navegador mantém a resolução) e *Fluidez* (jogos; mantém o FPS). Dá para trocar no meio da transmissão, sem encerrar.
+- **Limitação** (no painel de qualidade de quem transmite): mostra se o navegador está cortando qualidade por *processador* ou por *banda*. Processador → tente o codec H.264 (usa a placa de vídeo); banda → baixe o bitrate ou a resolução.
 
 > **1080p30 é meta, não garantia.** Depende da CPU/GPU de quem transmite, do conteúdo (tela com muito movimento exige mais bits), do navegador e principalmente do **seu upload**. Monitores menores que 1920×1080 ou janelas pequenas são enviados na resolução real, e a interface avisa isso.
 

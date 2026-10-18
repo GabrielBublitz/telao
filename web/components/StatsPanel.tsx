@@ -154,6 +154,12 @@ export default function StatsPanel({ session, snapshot: s }: { session: RoomSess
               value={`${fmtRes(l.width, l.height)} · ${v(l.fps)} FPS · ${v(l.kbps, ' kbps')}`}
             />
           ))}
+          <Row label="Prioridade" value={s.contentHint === 'motion' ? 'Fluidez (segura os FPS)' : 'Nitidez (segura a resolução)'} />
+          <Row
+            label="Limitação"
+            value={limitationText(sender.layers.at(-1)?.qualityLimitation ?? null) ?? 'nenhuma'}
+            testId="limitation"
+          />
           <Row label="Codec" value={`${sender.codec ?? '—'}${sender.encoder ? ` · ${sender.encoder}` : ''}`} />
           <Row label="Caminho" value={pathText(sender.path)} />
           <Row
@@ -237,11 +243,11 @@ function SectionTitle({ text }: { text: string }) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, testId }: { label: string; value: string; testId?: string }) {
   return (
     <>
       <dt>{label}</dt>
-      <dd>{value}</dd>
+      <dd data-testid={testId}>{value}</dd>
     </>
   );
 }

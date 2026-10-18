@@ -266,8 +266,13 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
             Prioridade
             <select
               value={opts.contentHint}
-              disabled={s.broadcasting}
-              onChange={(e) => setOpts({ ...opts, contentHint: e.target.value as 'detail' | 'motion' })}
+              onChange={(e) => {
+                const contentHint = e.target.value as 'detail' | 'motion';
+                setOpts({ ...opts, contentHint });
+                // Vale na hora, sem encerrar a transmissão.
+                if (s.broadcasting) void session.setContentHint(contentHint);
+              }}
+              data-testid="content-hint"
             >
               <option value="detail">Nitidez — texto, código, slides</option>
               <option value="motion">Fluidez — jogos, vídeos</option>

@@ -98,6 +98,8 @@ export type Snapshot = {
   sendingAudio: boolean;
   localStream: MediaStream | null;
   capture: CaptureSettings | null;
+  /** Prioridade em uso na transmissão (pode mudar ao vivo). */
+  contentHint: BroadcastOptions['contentHint'] | null;
   target: { width: number; height: number } | null; // resolução efetiva enviada
   capped: boolean; // true = limitada a 720p pelo servidor
   previewing: boolean; // mostrar a própria tela na grade (só quando pedido)
@@ -161,6 +163,7 @@ const initial: Snapshot = {
   sendingAudio: false,
   localStream: null,
   capture: null,
+  contentHint: null,
   target: null,
   capped: false,
   previewing: false,
@@ -937,6 +940,7 @@ export class RoomSession {
     const st = cap.settings;
     this.live = { stream: cap.stream, opts, stopSynthetic: cap.stopSynthetic };
     this.update({
+      contentHint: opts.contentHint,
       localStream: cap.stream,
       capture: {
         width: st.width ?? null,
@@ -977,6 +981,7 @@ export class RoomSession {
       this.appliedEncoding = '';
       this.update({ starting: false, broadcasting: true, sendingAudio: !!this.audioProducer, notice: null });
       await this.applyCap();
+      await this.applyDegradation();
       return true;
     } catch (e) {
       this.producer?.close();
@@ -1057,6 +1062,33 @@ export class RoomSession {
     if (!this.live) return;
     this.live.opts = { ...this.live.opts, bitrateKbps: kbps };
     await this.applyCap();
+  }
+
+  /** Troca a prioridade (nitidez × fluidez) ao vivo, sem reiniciar a transmissão. */
+  async setContentHint(hint: BroadcastOptions['contentHint']) {
+    const live = this.live;
+    if (!live) return;
+    live.opts = { ...live.opts, contentHint: hint };
+    const track = live.stream.getVideoTracks()[0];
+    if (track) track.contentHint = hint;
+    this.update({ contentHint: hint });
+    await this.applyDegradation();
+  }
+
+  /**
+   * Diz ao navegador o que sacrificar quando faltar CPU ou banda: em Fluidez, a resolução
+   * (segura os FPS); em Nitidez, os FPS (segura a resolução, bom para texto).
+   */
+  private async applyDegradation() {
+    const sender = this.producer?.rtpSender;
+    if (!sender || !this.live || this.producer?.closed) return;
+    const params = sender.getParameters();
+    params.degradationPreference = this.live.opts.contentHint === 'motion' ? 'maintain-framerate' : 'maintain-resolution';
+    try {
+      await sender.setParameters(params);
+    } catch {
+      // Navegador sem suporte a degradationPreference: vale só o contentHint da trilha.
+    }
   }
 
   async getMetrics(): Promise<Metrics> {
