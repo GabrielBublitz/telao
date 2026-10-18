@@ -27,10 +27,28 @@ const recvOf = (m: Metrics, key: string) => m.receivers.find((r) => r.key === ke
 
 type Warning = { cls: string; text: string };
 
+const OPEN_KEY = 'telao:qualidade:aberto';
+
 export default function StatsPanel({ session, snapshot: s }: { session: RoomSession; snapshot: Snapshot }) {
   const [hist, setHist] = useState<Metrics[]>([]);
   const m = hist.at(-1) ?? null;
-  const [open, setOpen] = useState(true);
+  // Começa recolhido (os avisos continuam no "i"); quem abrir fica com o painel aberto neste navegador.
+  const [open, setOpenState] = useState(false);
+  useEffect(() => {
+    try {
+      setOpenState(localStorage.getItem(OPEN_KEY) === '1');
+    } catch {
+      // armazenamento indisponível
+    }
+  }, []);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    try {
+      localStorage.setItem(OPEN_KEY, next ? '1' : '0');
+    } catch {
+      // armazenamento indisponível
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -115,7 +133,7 @@ export default function StatsPanel({ session, snapshot: s }: { session: RoomSess
           </h2>
           {warnings.length > 0 && <Hint warnings={warnings} />}
         </div>
-        <button className="ghost" style={{ padding: '4px 10px', fontSize: 13 }} onClick={() => setOpen(!open)}>
+        <button className="ghost" style={{ padding: '4px 10px', fontSize: 13 }} onClick={() => setOpen(!open)} aria-expanded={open} data-testid="stats-toggle">
           {open ? 'Ocultar' : 'Mostrar'}
         </button>
       </div>
