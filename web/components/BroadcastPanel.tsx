@@ -129,7 +129,10 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
         {s.broadcasting ? (
           <div className="split" ref={menuRef}>
             <button className="danger split-main" onClick={() => void session.stopBroadcast()} data-testid="stop">
-              ■ Encerrar
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style={{ flex: 'none' }}>
+                <rect width="10" height="10" rx="1.5" fill="currentColor" />
+              </svg>
+              Encerrar
             </button>
             <button
               className="danger split-caret"

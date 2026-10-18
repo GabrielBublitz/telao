@@ -406,6 +406,12 @@ h1 {
 .split > .split-main {
   flex: 1;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-left: 12px;
+  padding-right: 12px;
   white-space: nowrap;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
