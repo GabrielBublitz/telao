@@ -65,7 +65,7 @@ async function createRoom() {
 async function joinPage(browser, url, nickname) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   // Opções de transmissão lidas pelo painel ao abrir (mesmo formato salvo pela interface).
-  await ctx.addInitScript((opts) => localStorage.setItem('telao:broadcast:v2', JSON.stringify(opts)), {
+  await ctx.addInitScript((opts) => localStorage.setItem('telao:broadcast:v3', JSON.stringify(opts)), {
     codec: a.codec,
     resolution: RES,
     bitrateKbps: Number(a.bitrate),

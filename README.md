@@ -69,13 +69,13 @@ O botão 📷 ao lado de **Transmitir** liga a webcam, com ou sem transmitir a t
 - A câmera não conta no limite de transmissões nem no limite de 720p.
 
 ### Qualidade
-- **Captura:** quem transmite escolhe **720p (1280×720, padrão)** ou **1080p (1920×1080)**, sempre a 30 FPS (`getDisplayMedia`). O 720p é mais leve: use se estiver travando. O codec é VP8 (padrão) ou H.264.
+- **Captura:** quem transmite escolhe **720p (1280×720, padrão)** ou **1080p (1920×1080)**, sempre a 30 FPS (`getDisplayMedia`). O 720p é mais leve: use se estiver travando. O codec padrão é H.264, que costuma ser codificado pela placa de vídeo e deixa o processador livre para o jogo; VP8 fica como alternativa. Se o navegador não tiver H.264, o Telão usa VP8 sozinho. O codec pode ser trocado no meio da transmissão, sem escolher a tela de novo (quem assiste vê a imagem parar por um instante). Na linha **Codec** do painel de envio aparece quem está codificando: nomes com *MediaFoundation*/*External* indicam a placa de vídeo; *OpenH264* ou *libvpx*, o processador.
 - **Bitrate:** alvo de 5 Mbps em 1080p e 2,5 Mbps em 720p, ajustável **ao vivo** de 2,5 a 8 Mbps (até 12 Mbps se você aumentar `MAX_BITRATE_KBPS`).
 - **Adaptação por espectador (simulcast):** o transmissor envia a camada principal e uma camada reserva com metade da resolução (540p no modo 1080p, 360p no modo 720p). O servidor escolhe para cada espectador a camada que cabe na conexão dele, com base na estimativa de banda (transport-cc).
 - **Nada é reduzido em silêncio.** O espectador vê o aviso *"recebendo a camada reduzida (≈540p)"*, e o transmissor vê quem está em 540p e por quê. Se o navegador do transmissor reduzir a qualidade por CPU ou banda (`qualityLimitationReason`), isso também aparece.
 - **Métricas na tela:** resolução, FPS, bitrate, perda de pacotes, jitter, RTT, codec, camada, quadros perdidos e o caminho de rede (UDP/TCP, direto/TURN).
 - **Prioridade:** escolha entre *Nitidez* (texto e código; o navegador mantém a resolução) e *Fluidez* (jogos; mantém o FPS). Dá para trocar no meio da transmissão, sem encerrar.
-- **Limitação** (no painel de qualidade de quem transmite): mostra se o navegador está cortando qualidade por *processador* ou por *banda*. Processador → tente o codec H.264 (usa a placa de vídeo); banda → baixe o bitrate ou a resolução.
+- **Limitação** (no painel de qualidade de quem transmite): mostra se o navegador está cortando qualidade por *processador* ou por *banda*. Processador → confira se o codec é H.264 (usa a placa de vídeo); banda → baixe o bitrate ou a resolução.
 
 > **1080p30 é meta, não garantia.** Depende da CPU/GPU de quem transmite, do conteúdo (tela com muito movimento exige mais bits), do navegador e principalmente do **seu upload**. Monitores menores que 1920×1080 ou janelas pequenas são enviados na resolução real, e a interface avisa isso.
 
@@ -407,7 +407,7 @@ Em ambos os casos:
 | Rede local ok, de fora não ("Falha na mídia") | Porta 40000 sem encaminhamento, firewall ou CGNAT | Seções 3, 4.4 e 7; `npm run diagnose` |
 | Caminho mostra `TCP` | UDP bloqueado na rede do espectador ou no roteador | Confirme o encaminhamento de UDP 40000; funciona, mas com mais atraso |
 | "Recebendo a camada reduzida (≈540p)" | A conexão do espectador ou o seu upload não comportam 1080p | Reduza o bitrate, diminua os espectadores ou peça ao espectador para usar cabo |
-| "O navegador está reduzindo a qualidade por CPU" | Codificação pesada no transmissor | Use H.264 (em Opções avançadas), escolha 720p ou feche programas pesados |
+| "O navegador está reduzindo a qualidade por CPU" | Codificação pesada no transmissor | Confira se o codec é H.264 (na engrenagem), escolha 720p ou feche programas pesados |
 | FPS de envio baixo e captura menor que 1080p | Monitor ou janela menor que 1920×1080 | Compartilhe a tela inteira de um monitor 1080p ou maior |
 | Imagem congelada | Perda de quadro-chave | Botão **Atualizar imagem** |
 | Funciona no Chrome e não no Safari | Safari desatualizado | Atualize o iOS/macOS. O Safari moderno suporta WebRTC para assistir; o alvo principal são Chrome, Edge e Firefox |

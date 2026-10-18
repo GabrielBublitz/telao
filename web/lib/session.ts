@@ -527,8 +527,8 @@ export class RoomSession {
     if (!this.sendTransport || this.sendTransport.closed) {
       const t = await this.createTransport('send');
       t.on('produce', ({ kind, rtpParameters, appData }, callback, errback) => {
-        const source = (appData as { source?: string } | undefined)?.source;
-        this.req<{ id: string }>('produce', { transportId: t.id, kind, rtpParameters, source })
+        const { source, replace } = (appData ?? {}) as { source?: string; replace?: boolean };
+        this.req<{ id: string }>('produce', { transportId: t.id, kind, rtpParameters, source, replace: replace === true })
           .then(({ id }) => callback({ id }))
           .catch(errback);
       });
@@ -952,6 +952,65 @@ export class RoomSession {
   }
 
   /** Envia a captura atual ao servidor (também usada para retomar após reconexão). */
+  /**
+   * Codec de vídeo a usar. H.264 (padrão) costuma ser codificado pela placa de vídeo e alivia o
+   * processador de quem joga; se o navegador não tiver H.264, cai para VP8 em vez de falhar.
+   */
+  private videoCodec(name: BroadcastOptions['codec']) {
+    const find = (n: string) => this.device?.rtpCapabilities.codecs?.find((c) => c.mimeType.toLowerCase() === `video/${n}`);
+    return find(name) ?? (name === 'h264' ? find('vp8') : undefined);
+  }
+
+  /** Cria o produtor de vídeo da tela. replace: troca o vídeo atual no servidor sem liberar a vaga. */
+  private async produceVideo(track: MediaStreamTrack, opts: BroadcastOptions, replace: boolean) {
+    const codec = this.videoCodec(opts.codec);
+    if (!codec) throw new Error(`Seu navegador não suporta ${opts.codec.toUpperCase()}. Escolha outro codec.`);
+    const maxKbps = Math.min(opts.bitrateKbps, this.snapshot.bitrate?.maxKbps ?? opts.bitrateKbps);
+    const top: RTCRtpEncodingParameters = { maxBitrate: maxKbps * 1000, maxFramerate: 30, scaleResolutionDownBy: 1 };
+    // Simulcast: camada reserva em meia resolução para espectadores com conexão fraca.
+    const encodings = opts.simulcast
+      ? [{ maxBitrate: Math.min(opts.resolution === 720 ? 600_000 : 1_200_000, maxKbps * 300), maxFramerate: 30, scaleResolutionDownBy: 2 }, top]
+      : [top];
+    const transport = await this.ensureSendTransport();
+    // stopTracks: false — a captura continua viva se a conexão cair, para retomar sem pedir a tela de novo.
+    return transport.produce({
+      track,
+      encodings,
+      codec,
+      codecOptions: { videoGoogleStartBitrate: 3000 },
+      stopTracks: false,
+      appData: replace ? { replace: true } : {},
+    });
+  }
+
+  /** Troca o codec ao vivo: a captura continua; quem assiste passa para o vídeo novo em um instante. */
+  async setCodec(codec: BroadcastOptions['codec']) {
+    const live = this.live;
+    const old = this.producer;
+    if (!live || !old || old.closed || this.switching || live.opts.codec === codec) return;
+    if (!this.videoCodec(codec)) {
+      this.update({ error: `Seu navegador não suporta ${codec.toUpperCase()}.` });
+      return;
+    }
+    this.switching = true;
+    this.update({ switching: true });
+    live.opts = { ...live.opts, codec };
+    try {
+      old.close(); // só para de enviar daqui; o servidor troca quando o vídeo novo chegar
+      this.producer = await this.produceVideo(live.stream.getVideoTracks()[0], live.opts, true);
+      this.tracker = new MetricsTracker();
+      this.appliedEncoding = '';
+      await this.applyCap();
+      await this.applyDegradation();
+    } catch (e) {
+      this.producer = null;
+      await this.stopBroadcast(`Não foi possível trocar o codec: ${errText(e)}`);
+    } finally {
+      this.switching = false;
+      this.update({ switching: false });
+    }
+  }
+
   private async publish() {
     const live = this.live;
     if (!live || !this.device) return false;
@@ -959,17 +1018,8 @@ export class RoomSession {
     const track = stream.getVideoTracks()[0];
     const audioTrack = stream.getAudioTracks()[0];
     try {
-      const codec = this.device.rtpCapabilities.codecs?.find((c) => c.mimeType.toLowerCase() === `video/${opts.codec}`);
-      if (!codec) throw new Error(`Seu navegador não suporta ${opts.codec.toUpperCase()}. Escolha outro codec.`);
-      const maxKbps = Math.min(opts.bitrateKbps, this.snapshot.bitrate?.maxKbps ?? opts.bitrateKbps);
-      const top: RTCRtpEncodingParameters = { maxBitrate: maxKbps * 1000, maxFramerate: 30, scaleResolutionDownBy: 1 };
-      // Simulcast: camada reserva em meia resolução para espectadores com conexão fraca.
-      const encodings = opts.simulcast
-        ? [{ maxBitrate: Math.min(opts.resolution === 720 ? 600_000 : 1_200_000, maxKbps * 300), maxFramerate: 30, scaleResolutionDownBy: 2 }, top]
-        : [top];
       const transport = await this.ensureSendTransport();
-      // stopTracks: false — a captura continua viva se a conexão cair, para retomar sem pedir a tela de novo.
-      this.producer = await transport.produce({ track, encodings, codec, codecOptions: { videoGoogleStartBitrate: 3000 }, stopTracks: false });
+      this.producer = await this.produceVideo(track, opts, false);
       if (audioTrack && audioTrack.readyState === 'live') {
         this.audioProducer = await transport.produce({
           track: audioTrack,

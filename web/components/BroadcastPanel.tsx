@@ -5,7 +5,9 @@ import { CAPPED_MAX_KBPS, type AudioMode, type BroadcastOptions, type RoomSessio
 import NoticeHint from './NoticeHint';
 
 // v2: o padrão passou a ser 720p; a chave nova descarta preferências antigas salvas em 1080p.
-const OPTS_KEY = 'telao:broadcast:v2';
+const OPTS_KEY = 'telao:broadcast:v3';
+// v2 tinha VP8 como padrão; ao migrar, o codec volta ao novo padrão (H.264, pela placa de vídeo).
+const OLD_OPTS_KEY = 'telao:broadcast:v2';
 const BITRATES = [1500, 2500, 4000, 5000, 6000, 8000, 10000, 12000];
 // Bitrate sugerido ao trocar a resolução.
 const RECOMMENDED: Record<720 | 1080, number> = { 720: 2500, 1080: 5000 };
@@ -39,7 +41,7 @@ function GearIcon() {
 
 function loadOpts(): Omit<BroadcastOptions, 'synthetic'> {
   const base = {
-    codec: 'vp8' as const,
+    codec: 'h264' as 'vp8' | 'h264',
     resolution: 720 as 720 | 1080,
     bitrateKbps: RECOMMENDED[720],
     simulcast: true,
@@ -47,7 +49,10 @@ function loadOpts(): Omit<BroadcastOptions, 'synthetic'> {
     audio: 'tab' as AudioMode,
   };
   try {
-    const saved = JSON.parse(localStorage.getItem(OPTS_KEY) ?? '{}');
+    const current = localStorage.getItem(OPTS_KEY);
+    const saved = JSON.parse(current ?? localStorage.getItem(OLD_OPTS_KEY) ?? '{}');
+    if (current === null) delete saved.codec;
+    if (!['vp8', 'h264'].includes(saved.codec)) delete saved.codec;
     // Versões antigas guardavam o áudio como liga/desliga: ligado vira "só a aba" (o modo seguro).
     if (typeof saved.audio === 'boolean') saved.audio = saved.audio ? 'tab' : 'off';
     if (!['tab', 'system', 'off'].includes(saved.audio)) delete saved.audio;
@@ -281,9 +286,19 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
 
           <label className="field">
             Codec
-            <select value={opts.codec} disabled={s.broadcasting} onChange={(e) => setOpts({ ...opts, codec: e.target.value as 'vp8' | 'h264' })}>
-              <option value="vp8">VP8 (mais compatível)</option>
-              <option value="h264">H.264 (pode usar a GPU)</option>
+            <select
+              value={opts.codec}
+              disabled={s.switching}
+              onChange={(e) => {
+                const codec = e.target.value as 'vp8' | 'h264';
+                setOpts({ ...opts, codec });
+                // Vale na hora: a captura continua e quem assiste passa para o vídeo novo.
+                if (s.broadcasting) void session.setCodec(codec);
+              }}
+              data-testid="codec"
+            >
+              <option value="h264">H.264 — placa de vídeo (recomendado)</option>
+              <option value="vp8">VP8 — processador (mais compatível)</option>
             </select>
           </label>
 

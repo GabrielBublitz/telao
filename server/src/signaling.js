@@ -276,6 +276,17 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
           broadcastState(room);
           return { id: audio.id };
         }
+        if (peer.producer && data.replace === true) {
+          // Troca de codec ao vivo: o vídeo novo entra no lugar do antigo e a vaga de transmissão continua com a pessoa.
+          const next = await t.produce({ kind: 'video', rtpParameters: data.rtpParameters, appData: { peerId: peer.id } });
+          const old = peer.producer;
+          peer.producer = next;
+          next.on('transportclose', () => endBroadcast(peer));
+          if (!old.closed) old.close(); // os espectadores trocam de consumidor pelo novo estado da sala
+          log.info(`[sala ${room.id}] "${peer.nickname}" trocou o codec para ${next.rtpParameters.codecs[0]?.mimeType}.`);
+          broadcastState(room);
+          return { id: next.id };
+        }
         if (peer.producer) throw new SignalError('Você já está transmitindo.');
         if (!rooms.claimBroadcast(room, peer.id)) {
           throw new SignalError(`Limite de ${rooms.maxBroadcasters} transmissões simultâneas atingido. Aguarde alguém encerrar.`);
