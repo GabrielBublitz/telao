@@ -55,7 +55,7 @@ Outros detalhes:
 - Quem assiste ouve pelo próprio quadro, com mudo e volume. Se o navegador bloquear o som automático, aparece o botão **"🔊 Clique para ouvir"**.
 
 ### Trocar de tela sem encerrar
-Durante a transmissão, o botão **Trocar tela** abre o seletor de novo para escolher outra tela, janela ou aba, como no Discord.
+Durante a transmissão, a seta ao lado de **Encerrar** abre um menu com **Trocar tela**, que mostra o seletor de novo para escolher outra tela, janela ou aba, como no Discord.
 - Quem assiste continua na mesma transmissão, sem piscar nem precisar clicar em nada.
 - O áudio acompanha a nova escolha: se a nova fonte não tiver som, só o áudio para e o vídeo segue.
 - Cancelar o seletor mantém a tela atual.

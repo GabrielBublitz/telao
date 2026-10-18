@@ -63,6 +63,27 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
   const [canCapture, setCanCapture] = useState(true);
   const [canCamera, setCanCamera] = useState(true);
   const settingsRef = useRef<HTMLDialogElement>(null);
+  // Menu da seta ao lado de "Encerrar": fecha ao clicar fora, com Esc ou quando a transmissão acaba.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+  useEffect(() => {
+    if (!s.broadcasting) setMenuOpen(false);
+  }, [s.broadcasting]);
 
   useEffect(() => {
     setCanCapture(synthetic || !!navigator.mediaDevices?.getDisplayMedia);
@@ -106,23 +127,42 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
       {/* Botão e resolução lado a lado */}
       <div className="row control-row" style={{ flexWrap: 'nowrap' }}>
         {s.broadcasting ? (
-          <>
-            {/* Trocar a tela sem encerrar: quem assiste continua na mesma transmissão. */}
-            <button
-              className="btn-icon"
-              style={{ flex: 1, minWidth: 0 }}
-              onClick={() => void session.switchScreen()}
-              disabled={s.switching}
-              title="Escolher outra tela, janela ou aba sem encerrar a transmissão"
-              data-testid="switch"
-            >
-              <ScreenIcon />
-              {s.switching ? 'Escolhendo…' : 'Trocar tela'}
-            </button>
-            <button className="danger" style={{ flex: 'none' }} onClick={() => void session.stopBroadcast()} data-testid="stop">
+          <div className="split" ref={menuRef}>
+            <button className="danger split-main" onClick={() => void session.stopBroadcast()} data-testid="stop">
               ■ Encerrar
             </button>
-          </>
+            <button
+              className="danger split-caret"
+              onClick={() => setMenuOpen(!menuOpen)}
+              aria-label="Mais opções da transmissão"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              data-testid="broadcast-menu"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div className="menu" role="menu">
+                {/* Trocar a tela sem encerrar: quem assiste continua na mesma transmissão. */}
+                <button
+                  role="menuitem"
+                  className="btn-icon"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    void session.switchScreen();
+                  }}
+                  disabled={s.switching}
+                  title="Escolher outra tela, janela ou aba sem encerrar a transmissão"
+                  data-testid="switch"
+                >
+                  <ScreenIcon />
+                  Trocar tela
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
           <button
             className="btn-icon"
@@ -135,13 +175,12 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
             {s.starting ? 'Escolhendo…' : 'Transmitir'}
           </button>
         )}
-        {/* Durante a transmissão a resolução não muda; o espaço vai para o "Trocar tela". */}
         <select
           aria-label="Resolução"
           title="Resolução"
           style={{ width: 'auto', flex: 'none' }}
           value={opts.resolution}
-          hidden={s.broadcasting}
+          disabled={s.broadcasting}
           onChange={(e) => {
             const resolution = Number(e.target.value) as 720 | 1080;
             setOpts({ ...opts, resolution, bitrateKbps: RECOMMENDED[resolution] });
