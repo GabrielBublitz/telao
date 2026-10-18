@@ -177,14 +177,13 @@ export default function StatsPanel({ session, snapshot: s }: { session: RoomSess
       {open &&
         receivers.map((r) => {
           const w = s.watched.find((x) => x.key === r.key);
-          // Dados avançados só para quem transmite; quem só assiste vê o essencial.
+          // Ao assistir, só o essencial (mesmo para quem também transmite); os detalhes técnicos ficam no envio.
           return (
             <ReceiverBlock
               key={r.key}
               title={receivers.length > 1 || both ? `Assistindo ${r.source === 'camera' ? 'a câmera de ' : ''}${r.nickname}` : null}
               r={r.metrics}
               w={w}
-              advanced={s.broadcasting}
             />
           );
         })}
@@ -192,16 +191,7 @@ export default function StatsPanel({ session, snapshot: s }: { session: RoomSess
   );
 }
 
-function ReceiverBlock({ title, r, w, advanced }: { title: string | null; r: ReceiverMetrics; w: WatchedStream | undefined; advanced: boolean }) {
-  const layer = w?.layer;
-  const layerText =
-    !layer || layer.count <= 1
-      ? 'única'
-      : layer.current === null
-        ? '…'
-        : layer.current === layer.count - 1
-          ? 'principal (máxima)'
-          : 'reserva (metade da resolução)';
+function ReceiverBlock({ title, r, w }: { title: string | null; r: ReceiverMetrics; w: WatchedStream | undefined }) {
   return (
     <dl className="metrics">
       {title && <SectionTitle text={title} />}
@@ -212,16 +202,6 @@ function ReceiverBlock({ title, r, w, advanced }: { title: string | null; r: Rec
       <Row label="Bitrate" value={v(r.kbps, ' kbps')} />
       <Row label="Latência" value={v(r.path?.rttMs, ' ms')} />
       <Row label="Áudio" value={w?.hasAudio ? 'sim' : 'não'} />
-      {advanced && (
-        <>
-          <Row label="Perda de pacotes" value={v(r.packetLossPct, '%')} />
-          <Row label="Jitter" value={v(r.jitterMs, ' ms')} />
-          <Row label="Camada" value={`${layerText}${w?.score != null ? ` · nota ${w.score}/10` : ''}`} />
-          <Row label="Codec" value={`${r.codec ?? '—'}${r.decoder ? ` · ${r.decoder}` : ''}`} />
-          <Row label="Quadros perdidos" value={`${v(r.framesDropped)} · congelamentos ${v(r.freezeCount)}`} />
-          <Row label="Caminho" value={pathText(r.path)} />
-        </>
-      )}
     </dl>
   );
 }
