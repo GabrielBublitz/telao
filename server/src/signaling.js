@@ -41,7 +41,10 @@ function clientIp(req) {
   return remote;
 }
 
-export function createSignaling({ httpServer, config, rooms, media, limiter, isOriginAllowed, log }) {
+export function createSignaling({ httpServer, config, rooms, media, limiter, isOriginAllowed, diagnostics = { write() {} }, log }) {
+  /** Evento do lado do servidor no arquivo de diagnóstico (ao lado das amostras dos navegadores). */
+  const diag = (peer, event, extra = {}) =>
+    diagnostics.write({ src: 'servidor', room: peer.room?.id ?? null, peer: peer.nickname, pid: peer.id.slice(0, 8), event, ...extra });
   const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
   httpServer.on('upgrade', (req, socket, head) => {
@@ -135,8 +138,9 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
       clearTimeout(joinTimer);
+      if (peer.room) diag(peer, 'ws-fechou', { code, reason: reason?.toString() || null });
       leave(peer);
     });
     ws.on('error', () => {});
@@ -200,6 +204,7 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
         peer.nickname = nickname;
         peer.protocol = data.protocol;
         log.info(`[sala ${room.id}] "${nickname}" entrou (${peer.ip}). Participantes: ${room.peers.size}`);
+        diag(peer, 'entrou', { participantes: room.peers.size });
         broadcastState(room);
         return {
           peerId: peer.id,
@@ -230,6 +235,8 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
           await transport.setMaxIncomingBitrate(config.maxBitrateKbps * 1000 + 2_000_000);
         }
         peer.transports.set(transport.id, transport);
+        transport.on('icestatechange', (state) => diag(peer, 'ice', { direction, state }));
+        transport.on('dtlsstatechange', (state) => diag(peer, 'dtls', { direction, state }));
         transport.observer.on('close', () => peer.transports.delete(transport.id));
         return {
           id: transport.id,
@@ -284,6 +291,7 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
           next.on('transportclose', () => endBroadcast(peer));
           if (!old.closed) old.close(); // os espectadores trocam de consumidor pelo novo estado da sala
           log.info(`[sala ${room.id}] "${peer.nickname}" trocou o codec para ${next.rtpParameters.codecs[0]?.mimeType}.`);
+          diag(peer, 'troca-codec', { codec: next.rtpParameters.codecs[0]?.mimeType });
           broadcastState(room);
           return { id: next.id };
         }
@@ -301,6 +309,7 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
         peer.producer = producer;
         producer.on('transportclose', () => endBroadcast(peer));
         log.info(`[sala ${room.id}] "${peer.nickname}" começou a transmitir (${producer.type}, ${producer.rtpParameters.codecs[0]?.mimeType}).`);
+        diag(peer, 'transmitindo', { codec: producer.rtpParameters.codecs[0]?.mimeType, camadas: producer.rtpParameters.encodings?.length ?? 1 });
         broadcastState(room);
         return { id: producer.id };
       }
@@ -314,6 +323,18 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
       case 'stopCamera': {
         requireRoom(peer);
         endCamera(peer);
+        return {};
+      }
+
+      case 'diag': {
+        // Amostra de qualidade do navegador (a cada ~2 s). Limitada em frequência e tamanho.
+        requireRoom(peer);
+        const now = Date.now();
+        if (now - (peer.lastDiag ?? 0) < 1_500) return {};
+        peer.lastDiag = now;
+        const sample = data.sample && typeof data.sample === 'object' ? data.sample : null;
+        if (!sample || JSON.stringify(sample).length > 16_000) return {};
+        diagnostics.write({ src: 'navegador', room: peer.room.id, peer: peer.nickname, pid: peer.id.slice(0, 8), ...sample });
         return {};
       }
 
@@ -359,10 +380,12 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
           if (peer.room) scheduleState(peer.room);
         });
         consumer.on('producerclose', () => {
+          diag(peer, 'consumidor-fechado', { kind: consumer.kind, motivo: 'transmissão encerrada/trocada' });
           peer.consumers.delete(consumer.id);
           notify(peer, 'consumerClosed', { consumerId: consumer.id });
         });
         consumer.on('layerschange', (layers) => {
+          if (consumer.kind === 'video') diag(peer, 'camada', { spatial: layers?.spatialLayer ?? null, temporal: layers?.temporalLayer ?? null });
           notify(peer, 'consumerLayers', {
             consumerId: consumer.id,
             spatialLayer: layers?.spatialLayer ?? null,
@@ -417,6 +440,7 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
       if (!peer.producer.closed) peer.producer.close(); // fecha os consumidores dos espectadores
       peer.producer = null;
       if (room) log.info(`[sala ${room.id}] "${peer.nickname}" encerrou a transmissão.`);
+      if (room) diag(peer, 'encerrou');
     }
     if (room) {
       rooms.releaseBroadcast(room, peer.id);

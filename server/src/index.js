@@ -6,6 +6,7 @@ import { config, WEB_OUT_DIR, DATA_DIR } from './config.js';
 import { createMedia } from './media.js';
 import { RoomManager, FailureLimiter } from './rooms.js';
 import { createSignaling } from './signaling.js';
+import { createDiagnostics } from './diagnostics.js';
 import { createStaticHandler, SECURITY_HEADERS } from './static.js';
 import { startAdmin } from './admin.js';
 import { startQuickTunnel } from './tunnel.js';
@@ -144,7 +145,8 @@ const httpServer = http.createServer((req, res) => {
   serveStatic(req, res);
 });
 
-const signaling = createSignaling({ httpServer, config, rooms, media, limiter, isOriginAllowed, log });
+const diagnostics = createDiagnostics({ dir: path.join(DATA_DIR, 'diagnostico'), enabled: config.diagnostics !== 'off', log });
+const signaling = createSignaling({ httpServer, config, rooms, media, limiter, isOriginAllowed, diagnostics, log });
 
 httpServer.listen(config.httpPort, config.httpHost, () => {
   log.info(`[http] Site + sinalização em http://${config.httpHost}:${config.httpPort}`);

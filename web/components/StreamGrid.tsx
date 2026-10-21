@@ -85,6 +85,38 @@ function StreamTile({ tile, compact = false }: { tile: Tile; compact?: boolean }
     };
   }, [tile.stream, audible]);
 
+  // Diagnóstico: mede buracos entre quadros mostrados (tela preta/parada para quem assiste) e avisa a sessão.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || tile.isLocal || typeof v.requestVideoFrameCallback !== 'function') return;
+    let last = 0;
+    let first = true;
+    let handle = 0;
+    const started = performance.now();
+    const report = (detail: Record<string, unknown>) =>
+      window.dispatchEvent(new CustomEvent('telao:diag', { detail: { ...detail, quadro: tile.label } }));
+    const onFrame = (now: number) => {
+      if (first) {
+        report({ e: 'primeiro-quadro', esperaMs: Math.round(now - started) });
+        first = false;
+      } else if (now - last > 1_000 && !document.hidden) {
+        report({ e: 'buraco-de-video', duracaoMs: Math.round(now - last) });
+      }
+      last = now;
+      handle = v.requestVideoFrameCallback(onFrame);
+    };
+    handle = v.requestVideoFrameCallback(onFrame);
+    // Aba escondida não desenha quadros: recomeça a medir ao voltar, para não contar como buraco.
+    const onVisible = () => {
+      if (!document.hidden) last = performance.now();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      v.cancelVideoFrameCallback(handle);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [tile.stream, tile.isLocal, tile.label]);
+
   // O navegador pausa vídeos de abas em segundo plano; ao voltar para a aba (ou se pausar sozinho), retoma.
   useEffect(() => {
     const v = videoRef.current;

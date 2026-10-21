@@ -25,6 +25,11 @@ export type SenderMetrics = {
   role: 'sender';
   codec: string | null;
   encoder: string | null;
+  /** true = codificação pela placa de vídeo (o navegador só informa com permissão de captura). */
+  powerEfficient: boolean | null;
+  /** Pedidos de quadro completo (PLI) e de reenvio (NACK) recebidos, acumulados. */
+  pliCount: number | null;
+  nackCount: number | null;
   captureWidth: number | null;
   captureHeight: number | null;
   captureFps: number | null;
@@ -45,6 +50,11 @@ export type ReceiverMetrics = {
   jitterMs: number | null;
   framesDropped: number | null;
   freezeCount: number | null;
+  freezeMs: number | null;
+  pauseCount: number | null;
+  keyFrames: number | null;
+  pliCount: number | null;
+  powerEfficient: boolean | null;
   path: PathMetrics | null;
 };
 
@@ -93,6 +103,9 @@ export class MetricsTracker {
     const layers: LayerMetrics[] = [];
     let codec: string | null = null;
     let encoder: string | null = null;
+    let powerEfficient: boolean | null = null;
+    let pliCount: number | null = null;
+    let nackCount: number | null = null;
     let source: AnyStats | undefined;
     report.forEach((raw) => {
       const s = raw as AnyStats;
@@ -100,6 +113,9 @@ export class MetricsTracker {
       if (s.type !== 'outbound-rtp' || s.kind !== 'video') return;
       codec ??= codecName(report, s.codecId);
       encoder ??= s.encoderImplementation ?? null;
+      if (typeof s.powerEfficientEncoder === 'boolean') powerEfficient ??= s.powerEfficientEncoder;
+      if (num(s.pliCount) !== null) pliCount = (pliCount ?? 0) + s.pliCount;
+      if (num(s.nackCount) !== null) nackCount = (nackCount ?? 0) + s.nackCount;
       layers.push({
         rid: s.rid ?? null,
         width: num(s.frameWidth),
@@ -115,6 +131,9 @@ export class MetricsTracker {
       role: 'sender',
       codec,
       encoder,
+      powerEfficient,
+      pliCount,
+      nackCount,
       captureWidth: num(source?.width),
       captureHeight: num(source?.height),
       captureFps: num(source?.framesPerSecond),
@@ -142,6 +161,11 @@ export class MetricsTracker {
       jitterMs: null,
       framesDropped: null,
       freezeCount: null,
+      freezeMs: null,
+      pauseCount: null,
+      keyFrames: null,
+      pliCount: null,
+      powerEfficient: null,
       path: readPath(report),
     };
     if (!inbound) return empty;
@@ -172,6 +196,11 @@ export class MetricsTracker {
       jitterMs: num(s.jitter) !== null ? Math.round(s.jitter * 1000) : null,
       framesDropped: num(s.framesDropped),
       freezeCount: num(s.freezeCount),
+      freezeMs: num(s.totalFreezesDuration) !== null ? Math.round(s.totalFreezesDuration * 1000) : null,
+      pauseCount: num(s.pauseCount),
+      keyFrames: num(s.keyFramesDecoded),
+      pliCount: num(s.pliCount),
+      powerEfficient: typeof s.powerEfficientDecoder === 'boolean' ? s.powerEfficientDecoder : null,
     };
   }
 }

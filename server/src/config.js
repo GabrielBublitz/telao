@@ -77,6 +77,8 @@ export const config = {
   mediaIpv6: str('MEDIA_IPV6', 'auto'),
   // "auto" = pede ao roteador (UPnP) para abrir as portas de mídia sozinho. Para o modo direto, sem playit.
   mediaUpnp: str('MEDIA_UPNP', 'off'),
+  // Grava métricas de qualidade em DATA_DIR/diagnostico (só neste PC, 7 dias). "off" desliga.
+  diagnostics: str('DIAGNOSTICO', 'on'),
 
   // ICE servers enviados ao navegador. STUN é opcional para este desenho (o SFU tem endereço público).
   stunUrls: list('STUN_URLS').length ? list('STUN_URLS') : ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'],

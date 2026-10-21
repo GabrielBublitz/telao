@@ -263,6 +263,14 @@ export class RoomSession {
   /** Progresso de cada vídeo recebido (quadros decodificados), para detectar imagem parada. */
   private progress = new Map<string, { frames: number; since: number; askedKeyFrame: boolean }>();
   private healthTimer: ReturnType<typeof setInterval> | null = null;
+  // Diagnóstico: métricas e eventos enviados ao servidor a cada 2 s (gravados só no PC do servidor).
+  private diagTimer: ReturnType<typeof setInterval> | null = null;
+  private diagTracker = new MetricsTracker();
+  private diagEvents: Record<string, unknown>[] = [];
+  private onDiagEvent = (e: Event) => {
+    const d = (e as CustomEvent<Record<string, unknown>>).detail;
+    if (d && typeof d.e === 'string') this.diag(d.e, d);
+  };
   private closed = false;
   private retries = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -328,6 +336,11 @@ export class RoomSession {
     this.retries = 0;
     this.update({ phase: 'joined', peerId: res.peerId, roomName: res.roomName, bitrate: res.bitrate, error: null, notice: null });
     if (!this.healthTimer) this.healthTimer = setInterval(() => void this.healthCheck(), 3_000);
+    if (!this.diagTimer) {
+      this.diagTimer = setInterval(() => void this.sendDiag(), 2_000);
+      if (typeof window !== 'undefined') window.addEventListener('telao:diag', this.onDiagEvent);
+    }
+    this.diag('entrou');
     // Voltou depois de uma queda com a captura ainda ativa: retoma a transmissão automaticamente.
     if (this.live) await this.publish();
     if (this.camera) await this.publishCamera();
@@ -345,6 +358,7 @@ export class RoomSession {
   private scheduleReconnect() {
     if (this.closed || this.reconnectTimer) return; // já há uma reconexão agendada
     const delay = Math.min(15_000, 1_000 * 2 ** this.retries++);
+    this.diag('reconectando', { tentativa: this.retries, esperaMs: delay });
     this.update({
       phase: 'reconnecting',
       notice: `Reconectando em ${Math.round(delay / 1000)} s…${this.live ? ' Sua transmissão volta sozinha.' : ''}`,
@@ -358,6 +372,7 @@ export class RoomSession {
 
   private onSocketClose(code: number, reason: string) {
     if (this.closed) return;
+    this.diag('conexao-caiu', { code, reason: reason || null });
     // Lembra quem estava assistindo para restaurar a grade depois da reconexão (os IDs mudam).
     this.preferred = {
       items: this.snapshot.watched.map((w) => ({ nickname: w.nickname, source: w.source })),
@@ -384,6 +399,7 @@ export class RoomSession {
         break;
       case 'consumerClosed': {
         const id = (data as { consumerId: string }).consumerId;
+        this.diag('consumidor-fechado-pelo-servidor');
         for (const [pid, c] of this.consumers) {
           if (c.id === id) {
             c.close();
@@ -501,6 +517,7 @@ export class RoomSession {
         .catch(errback);
     });
     t.on('connectionstatechange', (state) => {
+      this.diag('transporte', { direcao: direction, estado: state });
       this.update(direction === 'send' ? { sendState: state } : { recvState: state });
       if (state === 'failed') {
         this.update({
@@ -621,6 +638,7 @@ export class RoomSession {
     if (this.closed || this.snapshot.phase !== 'joined' || !this.device) return;
     if (this.recvTransport && !this.recvTransport.closed && this.recvTransport.connectionState === 'failed') {
       // A recepção caiu: descarta tudo; a sincronização abaixo cria um transporte novo.
+      this.diag('recepcao-falhou-recriando');
       for (const pid of [...this.consumers.keys()]) this.dropConsumerFor(pid);
       this.recvTransport.close();
     }
@@ -653,9 +671,11 @@ export class RoomSession {
       const stalled = now - p.since;
       if (stalled > 5_000 && !p.askedKeyFrame) {
         p.askedKeyFrame = true;
+        this.diag('sem-quadros-pede-keyframe', { quadros: p.frames });
         void this.req('requestKeyFrame', { consumerId: c.id }).catch(() => {});
       } else if (stalled > 8_000 && p.frames === 0) {
         // Nunca chegou nenhum quadro (a transmissão "não apareceu"): fecha e abre de novo.
+        this.diag('reabrindo-sem-imagem');
         // Tela parada depois de já ter mostrado imagem é normal (sem movimento, poucos quadros) e não reabre.
         this.dropConsumerFor(pid);
         await this.req('stopWatching', { producerIds: [pid] }).catch(() => {});
@@ -676,6 +696,8 @@ export class RoomSession {
       const audio = x.audioProducerId ? this.consumers.get(x.audioProducerId) : undefined;
       const old = prev.get(k);
       const same = old && old.videoConsumerId === video.id && old.hasAudio === !!audio;
+      // Fluxo novo num quadro que já existia = o <video> recomeça (pode piscar preto até o próximo quadro completo).
+      if (old && !same) this.diag('fluxo-trocado', { de: x.nickname, motivo: old.videoConsumerId !== video.id ? 'video' : 'audio' });
       watched.push(
         same
           ? { ...old, nickname: x.nickname }
@@ -953,8 +975,8 @@ export class RoomSession {
 
   /** Envia a captura atual ao servidor (também usada para retomar após reconexão). */
   /**
-   * Codec de vídeo a usar. H.264 (padrão) costuma ser codificado pela placa de vídeo e alivia o
-   * processador de quem joga; se o navegador não tiver H.264, cai para VP8 em vez de falhar.
+   * Codec de vídeo a usar (padrão VP8, pelo processador). H.264 pode ir pela placa de vídeo; se o
+   * navegador não tiver H.264, cai para VP8 em vez de falhar.
    */
   private videoCodec(name: BroadcastOptions['codec']) {
     const find = (n: string) => this.device?.rtpCapabilities.codecs?.find((c) => c.mimeType.toLowerCase() === `video/${n}`);
@@ -1141,18 +1163,80 @@ export class RoomSession {
     }
   }
 
-  async getMetrics(): Promise<Metrics> {
-    const sender = this.producer && !this.producer.closed ? this.tracker.sender(await this.producer.getStats()) : null;
+  async getMetrics(tracker = this.tracker): Promise<Metrics> {
+    const sender = this.producer && !this.producer.closed ? tracker.sender(await this.producer.getStats()) : null;
     const receivers: Metrics['receivers'] = [];
     const streams = streamsOf(this.snapshot.room);
     for (const w of this.snapshot.watched) {
       const x = streams.find((s) => s.key === w.key);
       const c = x && this.consumers.get(x.producerId);
       if (c && !c.closed) {
-        receivers.push({ key: w.key, peerId: w.peerId, source: w.source, nickname: w.nickname, metrics: this.tracker.receiver(await c.getStats()) });
+        receivers.push({ key: w.key, peerId: w.peerId, source: w.source, nickname: w.nickname, metrics: tracker.receiver(await c.getStats()) });
       }
     }
     return { sender, receivers, receiver: receivers[0]?.metrics ?? null };
+  }
+
+  /** Registra um evento para o diagnóstico (vai junto com a próxima amostra). */
+  diag(e: string, extra: Record<string, unknown> = {}) {
+    this.diagEvents.push({ ...extra, e, ms: Date.now() });
+    if (this.diagEvents.length > 40) this.diagEvents.splice(0, this.diagEvents.length - 40);
+  }
+
+  private async sendDiag() {
+    if (this.closed || this.snapshot.phase !== 'joined') return;
+    let m: Metrics;
+    try {
+      m = await this.getMetrics(this.diagTracker);
+    } catch {
+      return;
+    }
+    const s = this.snapshot;
+    const tx = m.sender;
+    const sample = {
+      oculta: typeof document !== 'undefined' ? document.hidden : null,
+      envio: tx && {
+        codec: tx.codec,
+        encoder: tx.encoder,
+        gpu: tx.powerEfficient,
+        prioridade: s.contentHint,
+        limitado720: s.capped,
+        captura: { w: tx.captureWidth, h: tx.captureHeight, fps: tx.captureFps },
+        camadas: tx.layers.map((l) => ({ h: l.height, fps: l.fps, kbps: l.kbps, lim: l.qualityLimitation })),
+        bandaKbps: tx.path?.availableKbps ?? null,
+        rtt: tx.path?.rttMs ?? null,
+        caminho: tx.path ? `${tx.path.protocol}/${tx.path.localType}` : null,
+        pli: tx.pliCount,
+        nack: tx.nackCount,
+      },
+      recepcao: m.receivers.map((r) => {
+        const w = s.watched.find((x) => x.key === r.key);
+        const x = r.metrics;
+        return {
+          de: r.nickname,
+          fonte: r.source,
+          h: x.height,
+          fps: x.fps,
+          kbps: x.kbps,
+          perda: x.packetLossPct,
+          jitter: x.jitterMs,
+          descartados: x.framesDropped,
+          congel: x.freezeCount,
+          congelMs: x.freezeMs,
+          pausas: x.pauseCount,
+          keyframes: x.keyFrames,
+          pli: x.pliCount,
+          decoder: x.decoder,
+          gpu: x.powerEfficient,
+          camada: w?.layer.current ?? null,
+          nota: w?.score ?? null,
+          rtt: x.path?.rttMs ?? null,
+          bandaKbps: x.path?.availableKbps ?? null,
+        };
+      }),
+      eventos: this.diagEvents.splice(0),
+    };
+    void this.req('diag', { sample }).catch(() => {});
   }
 
   // ---------- encerramento ----------
@@ -1195,6 +1279,8 @@ export class RoomSession {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.healthTimer) clearInterval(this.healthTimer);
+    if (this.diagTimer) clearInterval(this.diagTimer);
+    if (typeof window !== 'undefined') window.removeEventListener('telao:diag', this.onDiagEvent);
     this.cleanupMedia({ keepCapture: false });
     this.signaling?.close();
     this.signaling = null;
