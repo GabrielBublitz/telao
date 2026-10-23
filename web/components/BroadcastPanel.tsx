@@ -312,7 +312,7 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
               onChange={(e) => setOpts({ ...opts, audio: e.target.value as AudioMode })}
               data-testid="audio"
             >
-              <option value="tab">Só o som da aba (recomendado)</option>
+              <option value="tab">Só o som da janela ou aba (recomendado)</option>
               <option value="system">Som do PC inteiro (inclui Discord e chamadas)</option>
               <option value="off">Sem áudio</option>
             </select>
@@ -321,7 +321,7 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
             {opts.audio === 'system'
               ? 'Vai junto tudo que toca no computador, inclusive a call do Discord. Para evitar, ponha a saída de voz do Discord em outro dispositivo (ex.: o fone).'
               : opts.audio === 'tab'
-                ? 'Para ter som, compartilhe uma ABA do navegador e marque “Compartilhar áudio da guia”. Janelas e a tela inteira vão sem som.'
+                ? 'Vai só o som do que você compartilhar: compartilhe a JANELA do jogo (ou uma aba) e marque “Compartilhar áudio” no seletor. A tela inteira vai sem som.'
                 : 'A transmissão vai só com imagem.'}
           </p>
         </div>

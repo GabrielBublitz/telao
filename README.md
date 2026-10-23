@@ -44,7 +44,7 @@ Qualquer pessoa na sala pode transmitir a tela (tela inteira, janela ou aba), **
 
 ### Áudio
 Na engrenagem (⚙), em **Áudio**:
-- **Só o som da aba** (padrão): vai só o som da aba compartilhada. Compartilhe uma **aba** e marque "Compartilhar áudio da guia". **Janelas e a tela inteira vão sem som**, porque o navegador não captura o som só de uma janela.
+- **Só o som da janela ou aba** (padrão): vai só o som do que foi compartilhado. Compartilhe a **janela** do jogo (ou uma **aba**) e marque "Compartilhar áudio" no seletor: vai o som daquele programa, sem Discord nem chamadas. O som de janela depende do Edge/Chrome recente no Windows; a **tela inteira** vai sem som neste modo.
 - **Som do PC inteiro:** é a mistura de tudo que toca no Windows, **inclusive a call do Discord**. O navegador não consegue tirar um programa específico dessa mistura. Para tirar o Discord, coloque a saída de voz dele em outro dispositivo (ex.: o fone), diferente do dispositivo padrão do Windows.
 - **Sem áudio.**
 
