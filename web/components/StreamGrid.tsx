@@ -18,7 +18,18 @@ export type Tile = {
  * Grade de transmissões lado a lado (1 = tela toda; 2+ = duas colunas) e, abaixo, a faixa de câmeras.
  * Sem nenhuma tela na grade, as câmeras ocupam o espaço principal.
  */
-export default function StreamGrid({ tiles, cameraTiles = [], emptyText }: { tiles: Tile[]; cameraTiles?: Tile[]; emptyText: string }) {
+export default function StreamGrid({
+  tiles,
+  cameraTiles = [],
+  emptyText,
+  sideCams = false,
+}: {
+  tiles: Tile[];
+  cameraTiles?: Tile[];
+  emptyText: string;
+  /** Câmeras em coluna à esquerda (modo foco ou escolha da pessoa) em vez da faixa embaixo. */
+  sideCams?: boolean;
+}) {
   const main = tiles.length ? tiles : cameraTiles;
   const strip = tiles.length ? cameraTiles : [];
   if (main.length === 0) {
@@ -28,20 +39,35 @@ export default function StreamGrid({ tiles, cameraTiles = [], emptyText }: { til
       </div>
     );
   }
-  return (
-    <div className="stack" style={{ gap: 8 }}>
-      <div className={`grid n${Math.min(main.length, 3)}`} style={{ ['--cols' as string]: main.length === 1 ? 1 : 2 }} data-testid="grid">
-        {main.map((t) => (
-          <StreamTile key={t.key} tile={t} />
-        ))}
-      </div>
-      {strip.length > 0 && (
-        <div className="cam-strip" data-testid="camera-strip">
+  const grid = (
+    <div className={`grid n${Math.min(main.length, 3)}`} style={{ ['--cols' as string]: main.length === 1 ? 1 : 2 }} data-testid="grid">
+      {main.map((t) => (
+        <StreamTile key={t.key} tile={t} />
+      ))}
+    </div>
+  );
+  if (strip.length === 0) return grid;
+  // Câmeras em coluna à esquerda (a primeira no topo, as próximas abaixo) e as telas ao lado.
+  if (sideCams) {
+    return (
+      <div className="focus-cams">
+        <div className="cam-column" data-testid="camera-strip">
           {strip.map((t) => (
             <StreamTile key={t.key} tile={t} compact />
           ))}
         </div>
-      )}
+        {grid}
+      </div>
+    );
+  }
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      {grid}
+      <div className="cam-strip" data-testid="camera-strip">
+        {strip.map((t) => (
+          <StreamTile key={t.key} tile={t} compact />
+        ))}
+      </div>
     </div>
   );
 }

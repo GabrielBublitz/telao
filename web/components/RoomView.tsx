@@ -9,6 +9,7 @@ import StatsPanel from './StatsPanel';
 import NoticeHint from './NoticeHint';
 
 const FOCUS_KEY = 'telao:foco';
+const SIDE_CAMS_KEY = 'telao:cameras-ao-lado';
 
 // Tempo mínimo que um erro fica no "i", mesmo que a sessão já o tenha limpado (ex.: logo após reconectar).
 const ERROR_MIN_MS = 30_000;
@@ -62,8 +63,20 @@ export default function RoomView({
   const [s, setS] = useState<Snapshot>(session.snapshot);
   // Modo foco: esconde os painéis em volta e deixa as transmissões ocuparem a tela (lembrado por navegador).
   const [focusPref, setFocusPref] = useState(false);
+  // Câmeras ao lado das telas também fora do modo foco (útil em notebook, onde a faixa embaixo fica cortada).
+  const [sideCamsPref, setSideCamsPref] = useState(false);
+  const toggleSideCams = () => {
+    const next = !sideCamsPref;
+    setSideCamsPref(next);
+    try {
+      localStorage.setItem(SIDE_CAMS_KEY, next ? '1' : '0');
+    } catch {
+      // armazenamento indisponível
+    }
+  };
   useEffect(() => {
     try {
+      setSideCamsPref(localStorage.getItem(SIDE_CAMS_KEY) === '1');
       setFocusPref(localStorage.getItem(FOCUS_KEY) === '1');
     } catch {
       // armazenamento indisponível
@@ -187,6 +200,17 @@ export default function RoomView({
           <span className="badge" title="Transmissões ao vivo">
             🔴 {broadcasters.length}
           </span>
+          {!focus && tiles.length > 0 && cameraTiles.length > 0 && (
+            <button
+              className={sideCamsPref ? '' : 'ghost'}
+              style={{ padding: '4px 10px', fontSize: 13 }}
+              onClick={toggleSideCams}
+              title={sideCamsPref ? 'Mostrar as câmeras numa faixa embaixo das transmissões' : 'Mostrar as câmeras numa coluna ao lado das transmissões'}
+              data-testid="side-cams"
+            >
+              {sideCamsPref ? '▤ Câmeras embaixo' : '▥ Câmeras ao lado'}
+            </button>
+          )}
           {tiles.length + cameraTiles.length > 0 && (
             <button
               className={focus ? '' : 'ghost'}
@@ -214,7 +238,7 @@ export default function RoomView({
 
       <div className={`layout${focus ? ' focus' : ''}`}>
         <div className="stack">
-          <StreamGrid tiles={tiles} cameraTiles={cameraTiles} emptyText={emptyText} />
+          <StreamGrid tiles={tiles} cameraTiles={cameraTiles} emptyText={emptyText} sideCams={focus || sideCamsPref} />
           {!focus && <StatsPanel session={session} snapshot={s} />}
         </div>
 

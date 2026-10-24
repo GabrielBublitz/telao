@@ -560,6 +560,43 @@ select option {
   right: 0;
 }
 
+/* Modo foco com câmeras: coluna de câmeras à esquerda, telas ao lado */
+.focus-cams {
+  display: grid;
+  grid-template-columns: clamp(160px, 14vw, 260px) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.cam-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
+}
+.cam-column > .stage {
+  flex: none;
+}
+/* 1 tela ao lado das câmeras: o maior 16:9 que cabe na altura, centralizado no espaço que sobra */
+.focus-cams .grid.n1 > .stage {
+  width: min(100%, calc((100dvh - 100px) * 16 / 9));
+  margin-inline: auto;
+}
+@media (max-width: 700px) {
+  .focus-cams {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cam-column {
+    order: 2;
+    flex-direction: row;
+    overflow-x: auto;
+    max-height: none;
+  }
+  .cam-column > .stage {
+    width: clamp(140px, 40%, 220px);
+  }
+}
+
 /* Câmeras: faixa de quadros pequenos abaixo das telas */
 .cam-strip {
   display: flex;
