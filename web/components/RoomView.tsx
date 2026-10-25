@@ -121,6 +121,7 @@ export default function RoomView({
     key: w.key,
     label: w.source === 'camera' ? `📷 ${w.nickname}` : w.nickname,
     stream: w.stream,
+    audioStream: w.audioStream,
     isLocal: false,
     hasAudio: w.hasAudio,
     badge: w.layer.count > 1 && w.layer.current !== null && w.layer.current < w.layer.count - 1 ? 'qualidade reduzida (conexão)' : null,

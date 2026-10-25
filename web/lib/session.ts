@@ -65,7 +65,10 @@ export type WatchedStream = {
   source: StreamSource;
   peerId: string;
   nickname: string;
+  /** Só o vídeo: nunca muda enquanto o vídeo for o mesmo (trocar reiniciaria o <video>, tela preta). */
   stream: MediaStream;
+  /** Só o som (tocado num <audio> separado); muda à vontade quando o som entra, sai ou troca. */
+  audioStream: MediaStream | null;
   hasAudio: boolean;
   videoConsumerId: string;
   layer: LayerInfo;
@@ -669,11 +672,14 @@ export class RoomSession {
         continue;
       }
       const stalled = now - p.since;
-      if (stalled > 5_000 && !p.askedKeyFrame) {
+      // Sem nenhuma imagem ainda (tela preta): pede quadro completo cedo e a cada verificação.
+      // Com imagem já mostrada, só pede uma vez depois de 5 s (tela parada é normal).
+      const noImage = p.frames === 0;
+      if (noImage ? stalled > 2_000 && stalled <= 9_000 : stalled > 5_000 && !p.askedKeyFrame) {
         p.askedKeyFrame = true;
         this.diag('sem-quadros-pede-keyframe', { quadros: p.frames });
         void this.req('requestKeyFrame', { consumerId: c.id }).catch(() => {});
-      } else if (stalled > 8_000 && p.frames === 0) {
+      } else if (stalled > 9_000 && noImage) {
         // Nunca chegou nenhum quadro (a transmissão "não apareceu"): fecha e abre de novo.
         this.diag('reabrindo-sem-imagem');
         // Tela parada depois de já ter mostrado imagem é normal (sem movimento, poucos quadros) e não reabre.
@@ -695,24 +701,34 @@ export class RoomSession {
       if (!x || !video) continue;
       const audio = x.audioProducerId ? this.consumers.get(x.audioProducerId) : undefined;
       const old = prev.get(k);
-      const same = old && old.videoConsumerId === video.id && old.hasAudio === !!audio;
-      // Fluxo novo num quadro que já existia = o <video> recomeça (pode piscar preto até o próximo quadro completo).
-      if (old && !same) this.diag('fluxo-trocado', { de: x.nickname, motivo: old.videoConsumerId !== video.id ? 'video' : 'audio' });
-      watched.push(
-        same
-          ? { ...old, nickname: x.nickname }
-          : {
-              key: k,
-              source: x.source,
-              peerId: x.peerId,
-              nickname: x.nickname,
-              stream: new MediaStream(audio ? [video.track, audio.track] : [video.track]),
-              hasAudio: !!audio,
-              videoConsumerId: video.id,
-              layer: { current: null, temporal: null, count: this.layerCounts.get(video.id) ?? 1 },
-              score: null,
-            },
-      );
+      if (old && old.videoConsumerId === video.id) {
+        // Mesmo vídeo: só o som muda (entra, sai ou troca), sem tocar no fluxo de vídeo. Trocar o vídeo
+        // reiniciaria o <video>, que fica preto até chegar um quadro completo (segundos, com a tela parada).
+        const want = audio?.track ?? null;
+        const cur = old.audioStream?.getAudioTracks()[0] ?? null;
+        if (cur !== want) {
+          this.diag('audio-trocado', { de: x.nickname, temAudio: !!want });
+          watched.push({ ...old, nickname: x.nickname, audioStream: want ? new MediaStream([want]) : null, hasAudio: !!want });
+        } else {
+          watched.push({ ...old, nickname: x.nickname });
+        }
+        continue;
+      }
+      if (old) this.diag('fluxo-trocado', { de: x.nickname, motivo: 'video' });
+      // Vídeo novo no quadro: pede um quadro completo já, em vez de esperar o próximo que o transmissor mandar.
+      void this.req('requestKeyFrame', { consumerId: video.id }).catch(() => {});
+      watched.push({
+        key: k,
+        source: x.source,
+        peerId: x.peerId,
+        nickname: x.nickname,
+        stream: new MediaStream([video.track]),
+        audioStream: audio ? new MediaStream([audio.track]) : null,
+        hasAudio: !!audio,
+        videoConsumerId: video.id,
+        layer: { current: null, temporal: null, count: this.layerCounts.get(video.id) ?? 1 },
+        score: null,
+      });
     }
     this.update({ watched, error: watched.length ? null : this.snapshot.error });
   }
