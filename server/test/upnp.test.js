@@ -97,6 +97,20 @@ test('detecta CGNAT pelo IP de internet do roteador e não abre portas', async (
   }
 });
 
+test('NAT duplo (roteador recebe 192.168.x): abre as portas aqui e explica o que falta no modem da frente', async () => {
+  const r = await fakeRouter({ externalIp: '192.168.3.6' });
+  try {
+    const res = await openMediaPorts({ lanIp: '192.168.0.101', ports, locations: [r.url] });
+    assert.equal(res.status, 'nat-duplo');
+    assert.deepEqual([...r.mappings.keys()].sort(), ['TCP 40000', 'UDP 40000']);
+    assert.match(res.error, /NAT duplo/);
+    assert.match(res.error, /192\.168\.3\.6/);
+    await res.close();
+  } finally {
+    r.close();
+  }
+});
+
 test('roteador que só aceita mapeamento permanente (725): tenta de novo sem prazo', async () => {
   const r = await fakeRouter({ onlyPermanent: true });
   try {

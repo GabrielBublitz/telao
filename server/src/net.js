@@ -127,6 +127,12 @@ export function isPrivateOrCgnat(ip) {
   );
 }
 
+/** Faixa reservada para CGNAT da operadora (100.64.0.0/10): daí não há como abrir porta. */
+export function isCgnat(ip) {
+  const p = ip.split('.').map(Number);
+  return p.length === 4 && p[0] === 100 && p[1] >= 64 && p[1] <= 127;
+}
+
 export function isLoopback(addr) {
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
 }

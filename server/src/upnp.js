@@ -1,7 +1,7 @@
 // UPnP IGD: pede ao roteador para abrir as portas de mídia sozinho (modo direto, sem playit).
 // Também lê o IP de internet do roteador: se ele for privado/CGNAT, o modo direto não funciona.
 import dgram from 'node:dgram';
-import { isPrivateOrCgnat } from './net.js';
+import { isPrivateOrCgnat, isCgnat } from './net.js';
 
 const SSDP_ADDRESS = '239.255.255.250';
 const SSDP_PORT = 1900;
@@ -142,7 +142,8 @@ export async function openMediaPorts({ lanIp, ports, log, leaseSeconds = 3600, l
     if (!service) throw lastErr ?? new Error('serviço UPnP não encontrado');
 
     result.externalIp = await getExternalIp(service).catch(() => null);
-    if (result.externalIp && isPrivateOrCgnat(result.externalIp)) {
+    // IP 100.64.x.x = CGNAT da operadora: nenhuma porta aberta aqui chega da internet.
+    if (result.externalIp && isCgnat(result.externalIp)) {
       result.cgnat = true;
       result.status = 'cgnat';
       result.error =
@@ -150,13 +151,25 @@ export async function openMediaPorts({ lanIp, ports, log, leaseSeconds = 3600, l
         'O modo direto não funciona nesta internet; use o playit ou peça um IP público à operadora.';
       return result;
     }
+    // IP de rede de casa (192.168.x, 172.16-31.x, 10.x) = há outro modem/roteador na frente (NAT duplo).
+    // Abre a porta neste roteador mesmo assim: aí só falta encaminhá-la no aparelho da frente.
+    const doubleNat = !!result.externalIp && isPrivateOrCgnat(result.externalIp);
 
     let lease = leaseSeconds;
     for (const { protocol, port } of ports) {
       lease = await addMapping(service, { protocol, port, internalClient: lanIp, leaseSeconds: lease, description });
       result.mapped.push({ protocol, port });
     }
-    result.status = 'ok';
+    if (doubleNat) {
+      const ports = result.mapped.map((m) => `${m.protocol} ${m.port}`).join(' e ');
+      result.status = 'nat-duplo';
+      result.error =
+        `Este roteador recebe o IP ${result.externalIp}: há outro modem/roteador na frente dele (NAT duplo). ` +
+        `Já abri ${ports} neste roteador; falta abrir no aparelho da frente: encaminhe ${ports} para ${result.externalIp} ` +
+        '(ou coloque o modem da operadora em modo bridge). Se esse aparelho receber um IP 100.64.x.x, é CGNAT e só funciona com o playit.';
+    } else {
+      result.status = 'ok';
+    }
     log?.info(`[upnp] Roteador abriu ${result.mapped.map((m) => `${m.protocol} ${m.port}`).join(' e ')} para ${lanIp} (IP de internet ${result.externalIp ?? '?'}).`);
 
     // Renova na metade do prazo (mapeamentos com prazo somem sozinhos se o servidor cair).

@@ -109,7 +109,7 @@ if (config.mediaUpnp === 'auto') {
 function getStatus() {
   const warnings = [...media.info.warnings];
   const ports = `UDP ${config.mediaUdpPort} e TCP ${config.mediaTcpPort}`;
-  if (upnp.status === 'cgnat') warnings.push(upnp.error);
+  if (upnp.status === 'cgnat' || upnp.status === 'nat-duplo') warnings.push(upnp.error);
   else if (upnp.status === 'falhou' || upnp.status === 'indisponivel') {
     warnings.push(`${upnp.error} Abra manualmente no roteador: ${ports} → ${media.info.lanIp}.`);
   }

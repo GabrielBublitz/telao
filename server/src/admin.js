@@ -121,7 +121,7 @@ async function refresh(){
     ['IP público (STUN)',esc(m.publicIp||'desconhecido')],
     ['Endereço anunciado',esc(m.announced||'nenhum (só rede local)')],
     ['IPv6 global',esc(m.ipv6||'não')],
-    ['Roteador (UPnP)',({ok:'<span class="ok">portas abertas automaticamente</span>',cgnat:'<span class="bad">CGNAT: modo direto não funciona</span>',falhou:'<span class="warn">não abriu: abra manualmente</span>',indisponivel:'<span class="warn">sem UPnP: abra manualmente</span>',verificando:'verificando…',desligado:'desligado (playit ou porta manual)'})[s.upnp.status]+(s.upnp.externalIp?' · IP de internet do roteador '+esc(s.upnp.externalIp):'')],
+    ['Roteador (UPnP)',({ok:'<span class="ok">portas abertas automaticamente</span>',cgnat:'<span class="bad">CGNAT: modo direto não funciona</span>','nat-duplo':'<span class="warn">aberto aqui, falta abrir no modem da frente (NAT duplo)</span>',falhou:'<span class="warn">não abriu: abra manualmente</span>',indisponivel:'<span class="warn">sem UPnP: abra manualmente</span>',verificando:'verificando…',desligado:'desligado (playit ou porta manual)'})[s.upnp.status]+(s.upnp.externalIp?' · IP de internet do roteador '+esc(s.upnp.externalIp):'')],
     ['Portas de mídia','UDP '+m.udpPort+' · TCP '+m.tcpPort],
   ].map(([k,v])=>'<dt>'+k+'</dt><dd>'+v+'</dd>').join('');
   $('#warn').innerHTML=s.warnings.map(w=>'<li class="warn">'+esc(w)+'</li>').join('');
