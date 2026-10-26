@@ -80,7 +80,7 @@ function StreamTile({ tile, compact = false }: { tile: Tile; compact?: boolean }
   const [fullscreen, setFullscreen] = useState(false);
   const [muted, setMuted] = useState(true);
   const [needsClick, setNeedsClick] = useState(false);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(0.5); // entra na metade: transmissão com som não chega estourando
   // Controles só aparecem com o mouse sobre a transmissão (e somem após alguns segundos parado).
   const [showControls, setShowControls] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
