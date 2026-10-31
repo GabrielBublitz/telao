@@ -38,6 +38,31 @@ test('sala expira após o TTL', () => {
   assert.deepEqual(m.expired().map((x) => x.id), [r.id]);
 });
 
+test('sala padrão: sem prazo, mantida pelo mesmo dono e trocada em nova abertura do app', () => {
+  const { m, clock } = manager();
+  const r = m.startSession(100);
+  clock.advance(10 * 365 * 86_400_000);
+  assert.equal(m.verify(r.id, r.key), r);
+  assert.deepEqual(m.expired(), []);
+  assert.equal(m.renew(r.id).expiresAt, null);
+
+  // Servidor reiniciado pelo mesmo Telao.exe: mesma sala, mesmo link.
+  const again = manager();
+  assert.equal(again.m.restore(JSON.parse(JSON.stringify(m.serialize()))), 1);
+  assert.equal(again.m.startSession(100).id, r.id);
+
+  // App aberto de novo: a sala antiga some, as salas manuais ficam.
+  const manual = again.m.create('Filme');
+  const novo = again.m.startSession(200);
+  assert.notEqual(novo.id, r.id);
+  assert.equal(again.m.get(r.id), null);
+  assert.equal(again.m.get(manual.id), manual);
+
+  again.m.endSession();
+  assert.equal(again.m.get(novo.id), null);
+  assert.equal(again.m.get(manual.id), manual);
+});
+
 test('renovar reinicia o prazo da sala', () => {
   const { m, clock } = manager();
   const r = m.create();

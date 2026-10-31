@@ -51,6 +51,12 @@ function saveRooms() {
     log.warn(`[salas] Não foi possível salvar ${ROOMS_FILE}: ${err.message}`);
   }
 }
+// Sala padrão: já existe ao abrir o app, sem prazo. process.ppid é o Telao.exe: se ele reiniciar o
+// servidor (queda ou atualização), a sala e o link continuam; ao abrir o app de novo, nasce outra.
+const sessionRoom = rooms.startSession(process.ppid);
+saveRooms();
+log.info(`[salas] Sala padrão pronta: ${sessionRoom.id} (dura enquanto o app estiver aberto).`);
+
 const limiter = new FailureLimiter();
 let tunnelUrl = null;
 
@@ -183,6 +189,7 @@ for (const w of m.warnings) log.warn(`[mídia] ${w}`);
 async function shutdown() {
   // O túnel continua rodando de propósito: ao reiniciar, a URL é a mesma. Para derrubar tudo: scripts\stop.ps1
   log.info('Encerrando...');
+  rooms.endSession();
   saveRooms();
   // Fecha as portas abertas no roteador (no máximo 3 s de espera).
   await Promise.race([upnp.close(), new Promise((r) => setTimeout(r, 3000))]);

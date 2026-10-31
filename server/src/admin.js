@@ -125,12 +125,12 @@ async function refresh(){
     ['Portas de mídia','UDP '+m.udpPort+' · TCP '+m.tcpPort],
   ].map(([k,v])=>'<dt>'+k+'</dt><dd>'+v+'</dd>').join('');
   $('#warn').innerHTML=s.warnings.map(w=>'<li class="warn">'+esc(w)+'</li>').join('');
-  $('#rooms').innerHTML=s.rooms.length?s.rooms.map(r=>'<div class="room"><div class="row" style="justify-content:space-between"><b>'+esc(r.name)+'</b><span class="mut">'+r.participantCount+' participante(s)'+(r.broadcasters.length?' · transmitindo: '+esc(r.broadcasters.join(', ')):'')+' · expira '+new Date(r.expiresAt).toLocaleString()+'</span></div>'+
+  $('#rooms').innerHTML=s.rooms.length?s.rooms.map(r=>'<div class="room"><div class="row" style="justify-content:space-between"><b>'+esc(r.name)+'</b><span class="mut">'+r.participantCount+' participante(s)'+(r.broadcasters.length?' · transmitindo: '+esc(r.broadcasters.join(', ')):'')+(r.expiresAt===null?' · dura enquanto o app estiver aberto':' · expira '+new Date(r.expiresAt).toLocaleString())+'</span></div>'+
     (r.publicLink?'<div class="mut">Link para os amigos:</div><code>'+esc(r.publicLink)+'</code>':'<div class="warn">Sem URL pública ainda.</div>')+
     '<div class="mut">Link para transmitir deste computador:</div><code>'+esc(r.localLink)+'</code>'+
     '<div class="row">'+(r.publicLink?'<button data-copy="'+esc(r.publicLink)+'">Copiar link dos amigos</button>':'')+
     '<a href="'+esc(r.localLink)+'" target="_blank" rel="noopener"><button class="ghost">Abrir para transmitir</button></a>'+
-    '<button class="ghost" data-renew="'+esc(r.id)+'" title="Reinicia o prazo da sala sem desconectar ninguém">Renovar (+'+s.roomTtlHours+' h)</button>'+
+    (r.expiresAt===null?'':'<button class="ghost" data-renew="'+esc(r.id)+'" title="Reinicia o prazo da sala sem desconectar ninguém">Renovar (+'+s.roomTtlHours+' h)</button>')+
     '<button class="danger" data-del="'+esc(r.id)+'">Apagar sala</button></div></div>').join(''):'<p class="mut">Nenhuma sala. Crie uma acima.</p>';
 }
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;

@@ -60,6 +60,9 @@ Durante a transmissão, a seta ao lado de **Encerrar** abre um menu com **Trocar
 - O áudio acompanha a nova escolha: se a nova fonte não tiver som, só o áudio para e o vídeo segue.
 - Cancelar o seletor mantém a tela atual.
 
+### Sala padrão
+Ao abrir o app, o Telão já cria uma sala, que aparece no painel. Ela não tem prazo e dura enquanto o app estiver aberto: fechou o app, ela acaba, e a próxima abertura cria outra (com link novo). Se o servidor reiniciar sozinho com o app aberto, a sala e o link continuam. Salas criadas à mão no painel seguem com o prazo de `ROOM_TTL_HOURS`.
+
 ### Câmera
 O botão 📷 ao lado de **Transmitir** liga a webcam, com ou sem transmitir a tela.
 - Só vídeo, sem microfone: a voz continua no Discord. Vai em 640×360 a 30 fps, até 600 kbps, então pesa pouco.

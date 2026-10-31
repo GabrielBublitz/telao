@@ -38,14 +38,33 @@ export class RoomManager {
     this.rooms = new Map();
   }
 
-  #make({ id, key, name, createdAt, expiresAt }) {
-    return { id, key, name, createdAt, expiresAt, peers: new Map(), broadcasters: new Set(), router: null };
+  #make({ id, key, name, createdAt, expiresAt, session = null }) {
+    return { id, key, name, createdAt, expiresAt, session, peers: new Map(), broadcasters: new Set(), router: null };
   }
 
   create(name = '') {
     if (this.rooms.size >= this.maxRooms) {
       throw new Error(`Limite de ${this.maxRooms} salas atingido. Apague uma sala antes de criar outra.`);
     }
+    return this.#add(name, this.now() + this.ttlMs, null);
+  }
+
+  /**
+   * Sala padrão do app: sem prazo, dura enquanto o app estiver aberto. owner identifica quem abriu o
+   * servidor: reinício pelo mesmo dono mantém a sala (e o link); dono novo = app aberto de novo, sala nova.
+   */
+  startSession(owner) {
+    const existing = this.list().find((r) => r.session === owner);
+    for (const r of this.list()) if (r.session !== null && r !== existing) this.rooms.delete(r.id);
+    return existing ?? this.#add('', null, owner);
+  }
+
+  /** App fechado: a sala padrão acaba junto. */
+  endSession() {
+    for (const r of this.list()) if (r.session !== null) this.rooms.delete(r.id);
+  }
+
+  #add(name, expiresAt, session) {
     let id;
     do id = randomId(10);
     while (this.rooms.has(id));
@@ -54,7 +73,8 @@ export class RoomManager {
       key: crypto.randomBytes(24).toString('base64url'), // 192 bits
       name: sanitizeNickname(name) ?? `Sala ${id.slice(0, 4)}`,
       createdAt: this.now(),
-      expiresAt: this.now() + this.ttlMs,
+      expiresAt,
+      session,
     });
     this.rooms.set(id, room);
     return room;
@@ -62,7 +82,7 @@ export class RoomManager {
 
   /** Dados persistentes (sem participantes nem mídia), para sobreviver a reinícios do servidor. */
   serialize() {
-    return this.list().map(({ id, key, name, createdAt, expiresAt }) => ({ id, key, name, createdAt, expiresAt }));
+    return this.list().map(({ id, key, name, createdAt, expiresAt, session }) => ({ id, key, name, createdAt, expiresAt, session }));
   }
 
   /** Recria salas salvas; ignora entradas inválidas ou expiradas. Retorna quantas foram restauradas. */
@@ -76,8 +96,8 @@ export class RoomManager {
         r.key.length >= 16 &&
         typeof r.name === 'string' &&
         Number.isFinite(r.createdAt) &&
-        Number.isFinite(r.expiresAt);
-      if (!valid || r.expiresAt <= this.now() || this.rooms.has(r.id) || this.rooms.size >= this.maxRooms) continue;
+        (Number.isFinite(r.expiresAt) || (r.expiresAt === null && Number.isInteger(r.session)));
+      if (!valid || (r.expiresAt !== null && r.expiresAt <= this.now()) || this.rooms.has(r.id) || this.rooms.size >= this.maxRooms) continue;
       this.rooms.set(r.id, this.#make({ ...r, name: sanitizeNickname(r.name) ?? r.id }));
       n++;
     }
@@ -93,14 +113,14 @@ export class RoomManager {
     const room = typeof id === 'string' ? this.rooms.get(id) : undefined;
     // Compara mesmo quando a sala não existe, para não vazar a existência pelo tempo de resposta.
     const ok = safeEqual(room?.key ?? 'x'.repeat(32), key);
-    if (!room || !ok || room.expiresAt <= this.now()) return null;
+    if (!room || !ok || (room.expiresAt !== null && room.expiresAt <= this.now())) return null;
     return room;
   }
 
   /** Reinicia o prazo da sala (agora + ROOM_TTL_HOURS), sem derrubar ninguém. Retorna a sala ou null. */
   renew(id) {
     const room = this.rooms.get(id) ?? null;
-    if (room) room.expiresAt = this.now() + this.ttlMs;
+    if (room && room.expiresAt !== null) room.expiresAt = this.now() + this.ttlMs;
     return room;
   }
 
@@ -117,7 +137,7 @@ export class RoomManager {
   /** Salas cujo prazo acabou (o chamador fecha a mídia e chama delete). */
   expired() {
     const t = this.now();
-    return this.list().filter((r) => r.expiresAt <= t);
+    return this.list().filter((r) => r.expiresAt !== null && r.expiresAt <= t);
   }
 
   addPeer(room, peer) {
