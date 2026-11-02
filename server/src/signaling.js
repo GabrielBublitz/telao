@@ -246,6 +246,18 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
         };
       }
 
+      case 'closeTransport': {
+        // O navegador desistiu de um transporte que falhou (rede caiu): fecha aqui também. Fechar o de envio
+        // encerra os produtores dele (tela, som, câmera), liberando a vaga para o navegador transmitir de novo.
+        requireRoom(peer);
+        const t = peer.transports.get(data.transportId);
+        if (t) {
+          diag(peer, 'transporte-descartado', { direction: t.appData.direction });
+          t.close();
+        }
+        return {};
+      }
+
       case 'connectTransport': {
         requireRoom(peer);
         const t = peer.transports.get(data.transportId);

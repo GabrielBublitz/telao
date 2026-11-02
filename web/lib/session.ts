@@ -151,6 +151,8 @@ type ConsumeResponse = {
 const FATAL_CLOSE_CODES = new Set([4001, 4002, 4003, 4004, 4008]);
 // Deve estar entre os aceitos pelo servidor (server/src/signaling.js).
 const PROTOCOL_VERSION = 3;
+/** Quantas vezes seguidas o envio é refeito sozinho após queda antes de mostrar o erro. */
+const MAX_SEND_RECOVERIES = 3;
 
 const initial: Snapshot = {
   phase: 'connecting',
@@ -241,6 +243,7 @@ export class RoomSession {
   private device: Device | null = null;
   private iceServers: RTCIceServer[] = [];
   private sendTransport: types.Transport | null = null;
+  private sendRecoveries = 0; // tentativas seguidas de refazer o envio após queda (zera ao conectar)
   private recvTransport: types.Transport | null = null;
   private producer: types.Producer | null = null; // vídeo
   private audioProducer: types.Producer | null = null;
@@ -519,18 +522,57 @@ export class RoomSession {
         .then(() => callback())
         .catch(errback);
     });
+    let connectedOnce = false;
     t.on('connectionstatechange', (state) => {
       this.diag('transporte', { direcao: direction, estado: state });
+      if (state === 'connected') connectedOnce = true;
       this.update(direction === 'send' ? { sendState: state } : { recvState: state });
-      if (state === 'failed') {
-        this.update({
-          error:
-            'A conexão de mídia falhou: o navegador não alcançou o servidor de vídeo por UDP nem TCP. ' +
-            'Verifique encaminhamento de portas/firewall (veja Diagnóstico no README).',
-        });
+      if (state === 'connected' && direction === 'send') this.sendRecoveries = 0;
+      if (state !== 'failed') return;
+      // Queda de rede no meio da sessão: refaz sozinho (envio aqui; recepção na verificação periódica).
+      // O aviso vermelho só aparece se nunca conectou ou se refazer não adiantou.
+      const everConnected = connectedOnce || (direction === 'send' && this.sendRecoveries > 0);
+      if (direction === 'send' && everConnected && this.sendRecoveries < MAX_SEND_RECOVERIES) {
+        void this.recoverSendTransport(t);
+        return;
       }
+      if (direction === 'recv' && everConnected) {
+        this.update({ notice: 'A conexão de vídeo caiu; reconectando…' });
+        return;
+      }
+      this.update({
+        error:
+          'A conexão de mídia falhou: o navegador não alcançou o servidor de vídeo por UDP nem TCP. ' +
+          'Verifique encaminhamento de portas/firewall (veja Diagnóstico no README).',
+      });
     });
     return t;
+  }
+
+  /**
+   * O envio caiu (ex.: a internet do servidor ou o túnel piscou): descarta o transporte no navegador e no
+   * servidor e transmite de novo com a mesma captura (tela, som e câmera), sem pedir a tela de novo.
+   */
+  private async recoverSendTransport(failed: types.Transport) {
+    if (this.sendTransport !== failed || this.closed) return;
+    this.sendRecoveries++;
+    this.diag('envio-falhou-recriando', { tentativa: this.sendRecoveries });
+    this.update({ notice: 'A conexão de vídeo caiu; refazendo sua transmissão…' });
+    this.producer?.close();
+    this.producer = null;
+    this.audioProducer?.close();
+    this.audioProducer = null;
+    this.cameraProducer?.close();
+    this.cameraProducer = null;
+    this.sendTransport = null;
+    failed.close();
+    await this.req('closeTransport', { transportId: failed.id }).catch(() => {});
+    // Espera um pouco (a rede costuma voltar em segundos) antes de tentar de novo, mais a cada tentativa.
+    await new Promise((r) => setTimeout(r, 1_000 * this.sendRecoveries));
+    if (this.closed || this.snapshot.phase !== 'joined') return; // a reconexão completa assume
+    const ok = this.live ? await this.publish({ keepCaptureOnFail: true }) : true;
+    if (this.camera) await this.publishCamera();
+    if (ok) this.update({ notice: null });
   }
 
   private async ensureRecvTransport() {
@@ -1058,7 +1100,7 @@ export class RoomSession {
     }
   }
 
-  private async publish() {
+  private async publish({ keepCaptureOnFail = false } = {}) {
     const live = this.live;
     if (!live || !this.device) return false;
     const { stream, opts } = live;
@@ -1085,7 +1127,8 @@ export class RoomSession {
       this.producer = null;
       this.audioProducer?.close();
       this.audioProducer = null;
-      this.endLocalCapture();
+      // Refazendo após queda e a sinalização também caiu: guarda a captura, a reconexão completa retoma.
+      if (!keepCaptureOnFail || this.snapshot.phase === 'joined') this.endLocalCapture();
       this.update({ starting: false, broadcasting: false, sendingAudio: false, error: errText(e) });
       return false;
     }
