@@ -448,6 +448,42 @@ h1 {
   color: var(--fg);
   font-weight: 500;
 }
+/* Menu alinhado pela direita (botões no fim da linha, ex.: câmera) */
+.menu.right {
+  left: auto;
+  right: 0;
+}
+.cam-menu {
+  width: max-content;
+  min-width: 220px;
+  max-width: min(320px, 85vw);
+}
+.cam-menu > button {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  text-align: left;
+}
+.menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.menu-check {
+  display: inline-block;
+  width: 1.2em;
+  flex: none;
+}
+/* Câmera: botão compacto com seta, sem esticar na linha */
+.split.cam-split {
+  flex: none;
+}
+.split.cam-split > .split-main {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.split.cam-split > .split-caret {
+  padding: 0 7px;
+}
 .menu > button:hover:not(:disabled) {
   filter: none;
   background: var(--line);

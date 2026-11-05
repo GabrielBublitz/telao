@@ -67,6 +67,7 @@ Ao abrir o app, o Telão já cria uma sala, que aparece no painel. Ela não tem 
 O botão 📷 ao lado de **Transmitir** liga a webcam, com ou sem transmitir a tela.
 - Só vídeo, sem microfone: a voz continua no Discord. Vai em 640×360 a 30 fps, até 600 kbps, então pesa pouco.
 - As câmeras aparecem sozinhas para todos, numa faixa abaixo da tela compartilhada. Se ninguém estiver transmitindo a tela, elas ocupam a área principal.
+- A seta ao lado do botão 📷 lista as câmeras do PC. Escolher uma liga essa câmera ou, com a câmera ligada, troca ao vivo (quem assiste não perde o quadro). A escolha fica lembrada no navegador; se a câmera escolhida for desconectada, abre a padrão.
 - A sua câmera aparece espelhada só para você. O ✕ dela desliga a câmera.
 - Para quem assiste, o ✕ só esconde aquela câmera. Para ver de novo, use "ver câmera" na lista **Na sala**.
 - A câmera não conta no limite de transmissões nem no limite de 720p.

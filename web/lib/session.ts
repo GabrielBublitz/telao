@@ -113,6 +113,8 @@ export type Snapshot = {
   cameraOn: boolean;
   cameraStarting: boolean;
   cameraStream: MediaStream | null;
+  /** Câmera em uso (deviceId do navegador), para marcar na lista. */
+  cameraDeviceId: string | null;
   // o que estou assistindo
   watched: WatchedStream[];
   recvState: string | null;
@@ -178,6 +180,7 @@ const initial: Snapshot = {
   cameraOn: false,
   cameraStarting: false,
   cameraStream: null,
+  cameraDeviceId: null,
   watched: [],
   recvState: null,
 };
@@ -783,7 +786,24 @@ export class RoomSession {
   // ---------- câmera ----------
 
   /** Liga a câmera (independente da transmissão de tela). Só vídeo, em 640×360. */
-  async startCamera() {
+  /** Abre uma câmera (a escolhida, ou a padrão do sistema). Escolhida que sumiu (desconectada): usa a padrão. */
+  private async openCamera(deviceId: string | null) {
+    const video = (id: string | null): MediaTrackConstraints => ({
+      width: { ideal: 640 },
+      height: { ideal: 360 },
+      frameRate: { ideal: 30, max: 30 },
+      ...(id ? { deviceId: { exact: id } } : {}),
+    });
+    try {
+      return await navigator.mediaDevices.getUserMedia({ video: video(deviceId), audio: false });
+    } catch (e) {
+      const gone = e instanceof DOMException && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError');
+      if (!deviceId || !gone) throw e;
+      return navigator.mediaDevices.getUserMedia({ video: video(null), audio: false });
+    }
+  }
+
+  async startCamera(deviceId: string | null = null) {
     if (this.snapshot.cameraOn || this.snapshot.cameraStarting) return;
     if (!navigator.mediaDevices?.getUserMedia) {
       this.update({ error: 'Este navegador não permite usar a câmera.' });
@@ -792,10 +812,7 @@ export class RoomSession {
     this.update({ cameraStarting: true, error: null });
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30, max: 30 } },
-        audio: false,
-      });
+      stream = await this.openCamera(deviceId);
     } catch (e) {
       const name = e instanceof DOMException ? e.name : '';
       const msg =
@@ -809,10 +826,42 @@ export class RoomSession {
       this.update({ cameraStarting: false, error: msg });
       return;
     }
-    stream.getVideoTracks()[0]?.addEventListener('ended', () => void this.stopCamera());
+    const track = stream.getVideoTracks()[0];
+    track?.addEventListener('ended', () => {
+      if (this.camera?.stream === stream) void this.stopCamera();
+    });
     this.camera = { stream };
-    this.update({ cameraStream: stream });
+    this.update({ cameraStream: stream, cameraDeviceId: track?.getSettings().deviceId ?? null });
     await this.publishCamera();
+  }
+
+  /** Troca de câmera; ligada, troca ao vivo (só a imagem enviada muda, quem assiste não perde o quadro). */
+  async switchCamera(deviceId: string) {
+    if (!this.snapshot.cameraOn || !this.camera) return this.startCamera(deviceId);
+    if (this.snapshot.cameraDeviceId === deviceId || this.snapshot.cameraStarting) return;
+    const old = this.camera;
+    this.update({ cameraStarting: true, error: null });
+    let stream: MediaStream;
+    try {
+      stream = await this.openCamera(deviceId);
+    } catch (e) {
+      this.update({ cameraStarting: false, error: `Não foi possível trocar de câmera: ${errText(e)}` });
+      return;
+    }
+    const track = stream.getVideoTracks()[0];
+    try {
+      if (this.cameraProducer && !this.cameraProducer.closed) await this.cameraProducer.replaceTrack({ track });
+    } catch (e) {
+      for (const t of stream.getTracks()) t.stop();
+      this.update({ cameraStarting: false, error: `Não foi possível trocar de câmera: ${errText(e)}` });
+      return;
+    }
+    track.addEventListener('ended', () => {
+      if (this.camera?.stream === stream) void this.stopCamera();
+    });
+    this.camera = { stream };
+    for (const t of old.stream.getTracks()) t.stop();
+    this.update({ cameraStarting: false, cameraStream: stream, cameraDeviceId: track.getSettings().deviceId ?? deviceId });
   }
 
   /** Envia a câmera ao servidor (também usada para retomar após reconexão). */
@@ -833,7 +882,7 @@ export class RoomSession {
     } catch (e) {
       for (const t of cam.stream.getTracks()) t.stop();
       this.camera = null;
-      this.update({ cameraOn: false, cameraStarting: false, cameraStream: null, error: `Não foi possível ligar a câmera: ${errText(e)}` });
+      this.update({ cameraOn: false, cameraStarting: false, cameraStream: null, cameraDeviceId: null, error: `Não foi possível ligar a câmera: ${errText(e)}` });
       return false;
     }
   }
@@ -844,7 +893,7 @@ export class RoomSession {
     this.cameraProducer = null;
     for (const t of this.camera?.stream.getTracks() ?? []) t.stop();
     this.camera = null;
-    this.update({ cameraOn: false, cameraStarting: false, cameraStream: null });
+    this.update({ cameraOn: false, cameraStarting: false, cameraStream: null, cameraDeviceId: null });
     await this.req('stopCamera').catch(() => {});
   }
 

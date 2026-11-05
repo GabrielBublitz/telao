@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CAPPED_MAX_KBPS, type AudioMode, type BroadcastOptions, type RoomSession, type Snapshot } from '@/lib/session';
 import NoticeHint from './NoticeHint';
 
@@ -64,6 +64,27 @@ function loadOpts(): Omit<BroadcastOptions, 'synthetic'> {
   }
 }
 
+const CAMERA_KEY = 'telao:camera';
+
+/** Fecha um menu ao clicar fora dele ou com Esc. */
+function useDismiss(ref: React.RefObject<HTMLElement | null>, open: boolean, close: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [ref, open, close]);
+}
+
 export default function BroadcastPanel({ session, snapshot: s, synthetic }: { session: RoomSession; snapshot: Snapshot; synthetic: boolean }) {
   const maxKbps = s.bitrate?.maxKbps ?? 8000;
   const [opts, setOpts] = useState(loadOpts);
@@ -73,21 +94,48 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
   // Menu da seta ao lado de "Encerrar": fecha ao clicar fora, com Esc ou quando a transmissão acaba.
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  useDismiss(menuRef, menuOpen, useCallback(() => setMenuOpen(false), []));
+
+  // Câmeras do PC (o nome só aparece depois que o site recebe permissão de câmera) e a escolhida.
+  const [camMenuOpen, setCamMenuOpen] = useState(false);
+  const camMenuRef = useRef<HTMLDivElement>(null);
+  useDismiss(camMenuRef, camMenuOpen, useCallback(() => setCamMenuOpen(false), []));
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [preferredCam, setPreferredCam] = useState<string | null>(null);
   useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false);
-    };
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
+    try {
+      setPreferredCam(localStorage.getItem(CAMERA_KEY));
+    } catch {
+      // armazenamento indisponível
+    }
+  }, []);
+  useEffect(() => {
+    const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+    if (!md?.enumerateDevices) return;
+    const refresh = () =>
+      md
+        .enumerateDevices()
+        .then((list) => setCameras(list.filter((d) => d.kind === 'videoinput')))
+        .catch(() => {});
+    refresh();
+    md.addEventListener?.('devicechange', refresh);
+    return () => md.removeEventListener?.('devicechange', refresh);
+  }, [s.cameraOn]); // ao ligar a câmera, a lista ganha os nomes
+  const chooseCamera = (id: string) => {
+    setCamMenuOpen(false);
+    setPreferredCam(id);
+    try {
+      localStorage.setItem(CAMERA_KEY, id);
+    } catch {
+      // armazenamento indisponível
+    }
+    void session.switchCamera(id);
+  };
+  // Sem permissão ainda, o navegador não diz quais câmeras existem (só "há uma câmera", sem id).
+  const knownCameras = cameras.filter((c) => c.deviceId);
+  const selectedCam = s.cameraOn
+    ? s.cameraDeviceId
+    : (knownCameras.find((c) => c.deviceId === preferredCam)?.deviceId ?? null);
   useEffect(() => {
     if (!s.broadcasting) setMenuOpen(false);
   }, [s.broadcasting]);
@@ -201,17 +249,62 @@ export default function BroadcastPanel({ session, snapshot: s, synthetic }: { se
           <option value={720}>720p</option>
         </select>
         {canCamera && (
-          <button
-            className={`icon-only${s.cameraOn ? '' : ' ghost'}`}
-            onClick={() => void (s.cameraOn ? session.stopCamera() : session.startCamera())}
-            disabled={s.phase !== 'joined' || s.cameraStarting}
-            title={s.cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
-            aria-label={s.cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
-            aria-pressed={s.cameraOn}
-            data-testid="camera"
-          >
-            <CameraIcon />
-          </button>
+          <div className="split cam-split" ref={camMenuRef}>
+            <button
+              className={`icon-only split-main${s.cameraOn ? '' : ' ghost'}`}
+              onClick={() => void (s.cameraOn ? session.stopCamera() : session.startCamera(selectedCam))}
+              disabled={s.phase !== 'joined' || s.cameraStarting}
+              title={s.cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+              aria-label={s.cameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+              aria-pressed={s.cameraOn}
+              data-testid="camera"
+            >
+              <CameraIcon />
+            </button>
+            <button
+              className={`split-caret${s.cameraOn ? '' : ' ghost'}`}
+              onClick={() => setCamMenuOpen(!camMenuOpen)}
+              disabled={s.phase !== 'joined' || s.cameraStarting}
+              title="Escolher a câmera"
+              aria-label="Escolher a câmera"
+              aria-haspopup="menu"
+              aria-expanded={camMenuOpen}
+              data-testid="camera-menu"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            {camMenuOpen && (
+              <div className="menu right cam-menu" role="menu" data-testid="camera-list">
+                {knownCameras.length === 0 ? (
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setCamMenuOpen(false);
+                      void session.startCamera();
+                    }}
+                  >
+                    Ligar a câmera padrão (depois a lista aparece aqui)
+                  </button>
+                ) : (
+                  knownCameras.map((c, i) => (
+                    <button
+                      key={c.deviceId}
+                      role="menuitemradio"
+                      aria-checked={c.deviceId === selectedCam}
+                      onClick={() => chooseCamera(c.deviceId)}
+                    >
+                      <span className="menu-check">{c.deviceId === selectedCam ? '✓' : ''}</span>
+                      <span className="menu-label" title={c.label || undefined}>
+                        {c.label || `Câmera ${i + 1}`}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         )}
         <button
           className="ghost icon-only"
