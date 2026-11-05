@@ -57,6 +57,8 @@ class Telao
             return 0;
         }
 
+        // Atualização com o Telão aberto deixa a versão anterior renomeada: apaga quando possível.
+        try { File.Delete(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Telao.old.exe")); } catch { }
         Banner();
         // Modo playit: o .env anuncia um endereço fixo (o do túnel). Modo direto (auto/UPnP): não precisa do playit.
         string announced = ReadEnv("MEDIA_ANNOUNCED_ADDRESS");
@@ -135,30 +137,78 @@ class Telao
     }
 
     /// O vídeo passa pelo túnel UDP do playit.gg (sua internet usa CGNAT): garante o serviço ligado.
-    static void EnsurePlayit()
+    static bool PlayitRunning()
     {
+        try
+        {
+            using (var sc = new ServiceController("playitd")) return sc.Status == ServiceControllerStatus.Running;
+        }
+        catch { return false; }
+    }
+
+    /// Liga o serviço do playit se estiver parado. true = rodando.
+    static bool StartPlayit(out string problem)
+    {
+        problem = null;
         try
         {
             using (var sc = new ServiceController("playitd"))
             {
-                if (sc.Status != ServiceControllerStatus.Running)
-                {
-                    Console.WriteLine("Ligando o serviço do playit.gg...");
-                    sc.Start();
-                    sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(15));
-                }
-                Console.WriteLine("playit.gg: ligado (vídeo pela internet).");
+                if (sc.Status == ServiceControllerStatus.Running) return true;
+                sc.Start();
+                sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(15));
+                return true;
             }
         }
-        catch (InvalidOperationException)
-        {
-            Warn("playit.gg não encontrado ou sem permissão para ligar. Abra o app do playit, senão o vídeo não chega aos amigos.");
-        }
-        catch (System.ServiceProcess.TimeoutException)
-        {
-            Warn("O serviço do playit.gg demorou para ligar. Confira no app do playit.");
-        }
+        catch (InvalidOperationException) { problem = "playit.gg não encontrado ou sem permissão para ligar"; }
+        catch (System.ServiceProcess.TimeoutException) { problem = "o serviço do playit.gg demorou para ligar"; }
+        return false;
+    }
+
+    static void EnsurePlayit()
+    {
+        if (!PlayitRunning()) Console.WriteLine("Ligando o serviço do playit.gg...");
+        string problem;
+        bool ok = StartPlayit(out problem);
+        if (ok) Console.WriteLine("playit.gg: ligado (vídeo pela internet).");
+        else Warn(problem + ". Abra o app do playit, senão o vídeo não chega aos amigos.");
         Console.WriteLine();
+
+        // Vigia: sem o playit, quem está fora não recebe nem envia vídeo (e o Telão parece "funcionar"
+        // para quem está neste PC). Confere a cada 30 s, tenta religar e avisa na janela.
+        new Thread(() =>
+        {
+            int misses = 0;
+            while (!quitting)
+            {
+                Thread.Sleep(30000);
+                if (quitting) break;
+                bool now = PlayitRunning();
+                if (!now)
+                {
+                    string p;
+                    now = StartPlayit(out p);
+                    if (now) Info("playit.gg estava desligado e foi religado: o vídeo volta a chegar aos amigos.");
+                    else if (ok || ++misses % 10 == 0) Alert("O playit.gg está DESLIGADO (" + p + "): quem está fora não recebe nem envia vídeo. Abra o app do playit.");
+                }
+                if (now) misses = 0;
+                ok = now;
+            }
+        }) { IsBackground = true }.Start();
+    }
+
+    static void Info(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("✔ " + msg);
+        Console.ResetColor();
+    }
+
+    static void Alert(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("✖ " + msg);
+        Console.ResetColor();
     }
 
     static bool OnConsoleClose(int ctrlType)

@@ -181,6 +181,8 @@ Os padrões já funcionam no Cenário A. Todas as opções estão comentadas no 
 Dê dois cliques em **`Telao.exe`**, na pasta `telao`.
 - Ele usa o Node 22 e o `cloudflared` da pasta `runtime/`, então não depende do Node instalado no PC.
 - Ele liga o serviço do playit, sobe o servidor e o túnel HTTPS, e abre o painel `http://localhost:3002` no navegador.
+- Enquanto está aberto, ele confere o playit a cada 30 s: se parou, tenta religar e, se não conseguir, mostra um aviso vermelho na janela. **Sem o playit, quem está fora não envia nem recebe vídeo**, mas para quem está neste PC tudo parece funcionar.
+- O serviço do playit (`playitd`) vem como **Manual** e, sem permissão de administrador, o Telão nem sempre consegue ligá-lo. Para ele ligar sozinho com o Windows, rode uma vez, num PowerShell **como Administrador**: `Set-Service playitd -StartupType Automatic`.
 - **Janela aberta = Telão no ar.** Fechar a janela (ou apertar Ctrl+C) desliga o servidor e o túnel.
 - Se o servidor cair, o `.exe` reinicia sozinho em 3 s, com o mesmo link.
 - Se o Telão já estiver rodando, abrir o `.exe` de novo só abre o painel.
