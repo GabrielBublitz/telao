@@ -233,6 +233,12 @@ function isPrivateAddress(ip: string) {
   return /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|fe80:|fc|fd|::1$)/i.test(ip);
 }
 
+/** Por onde a mídia passa: rede local (direto) ou endereço público (túnel/internet). Sem gravar o IP. */
+function rotaDe(remote: string | null | undefined) {
+  if (!remote) return null;
+  return isPrivateAddress(remote.replace(/^\[|\]?:\d+$/g, '')) ? 'local' : 'publica';
+}
+
 function errText(e: unknown) {
   if (e instanceof SignalError) return e.message;
   if (e instanceof DOMException) return `${e.name}: ${e.message}`;
@@ -270,7 +276,10 @@ export class RoomSession {
   private syncQueued = false;
   private syncRetries = 0;
   /** Progresso de cada vídeo recebido (quadros decodificados), para detectar imagem parada. */
-  private progress = new Map<string, { frames: number; since: number; askedKeyFrame: boolean }>();
+  private progress = new Map<string, { frames: number; since: number; askedKeyFrame: boolean; bytes: number; bytesSince: number }>();
+  /** Por consumidor: o transmissor ainda manda vídeo ao servidor (informado pelo servidor a cada 2 s). */
+  private sourceActive = new Map<string, boolean>();
+  private lastRecvRebuild = 0;
   private healthTimer: ReturnType<typeof setInterval> | null = null;
   // Diagnóstico: métricas e eventos enviados ao servidor a cada 2 s (gravados só no PC do servidor).
   private diagTimer: ReturnType<typeof setInterval> | null = null;
@@ -420,7 +429,14 @@ export class RoomSession {
       }
       case 'consumerLayers':
       case 'consumerQuality': {
-        const d = data as { consumerId: string; score?: number | null; spatialLayer: number | null; temporalLayer: number | null };
+        const d = data as {
+          consumerId: string;
+          score?: number | null;
+          spatialLayer: number | null;
+          temporalLayer: number | null;
+          producerActive?: boolean;
+        };
+        if (d.producerActive !== undefined) this.sourceActive.set(d.consumerId, d.producerActive);
         this.update({
           watched: this.snapshot.watched.map((w) =>
             w.videoConsumerId === d.consumerId
@@ -515,9 +531,12 @@ export class RoomSession {
   private async createTransport(direction: 'send' | 'recv') {
     const params = await this.req<TransportParams>('createTransport', { direction });
     // Modo diagnóstico (#...&rota=publica): descarta candidatos privados para forçar a rota pela internet.
+    // O servidor anuncia o endereço público (túnel) com prioridade maior que o da rede local. Quem está no
+    // mesmo PC ou na mesma rede acabaria passando pelo túnel (mais atraso, perda e banda do túnel gasta):
+    // aqui o endereço local ganha a frente. Quem está fora não alcança o local e segue pelo público.
     const iceCandidates = this.publicRouteOnly
       ? params.iceCandidates.filter((c) => !isPrivateAddress(c.address ?? c.ip))
-      : params.iceCandidates;
+      : params.iceCandidates.map((c) => (isPrivateAddress(c.address ?? c.ip) ? { ...c, priority: c.priority + 2_000 } : c));
     const opts = { ...params, iceCandidates, iceServers: this.iceServers };
     const t = direction === 'send' ? this.device!.createSendTransport(opts) : this.device!.createRecvTransport(opts);
     t.on('connect', ({ dtlsParameters }, callback, errback) => {
@@ -673,6 +692,7 @@ export class RoomSession {
     const c = this.consumers.get(pid);
     if (c) {
       this.progress.delete(c.id);
+      this.sourceActive.delete(c.id);
       c.close();
     }
     this.consumers.delete(pid);
@@ -689,6 +709,7 @@ export class RoomSession {
       this.diag('recepcao-falhou-recriando');
       for (const pid of [...this.consumers.keys()]) this.dropConsumerFor(pid);
       this.recvTransport.close();
+      void this.req('closeTransport', { transportId: this.recvTransport.id }).catch(() => {});
     }
     const room = this.snapshot.room;
     if (room) {
@@ -696,24 +717,42 @@ export class RoomSession {
       void this.syncConsumers();
     }
     const now = Date.now();
-    // Com a aba escondida o navegador pode parar de decodificar de propósito: não é imagem travada.
-    if (typeof document !== 'undefined' && document.hidden) {
-      this.progress.clear();
-      return;
-    }
+    // Com a aba escondida o navegador pode parar de decodificar de propósito: não é imagem travada. Os dados
+    // continuam chegando, então a vigilância de "nada chega" segue valendo; a de quadros, não.
+    const hidden = typeof document !== 'undefined' && document.hidden;
     for (const [pid, c] of [...this.consumers]) {
       if (c.kind !== 'video' || c.closed) continue;
       let frames = 0;
+      let bytes = 0;
       try {
-        (await c.getStats()).forEach((s: { type?: string; kind?: string; framesDecoded?: number }) => {
-          if (s.type === 'inbound-rtp' && s.kind === 'video') frames = s.framesDecoded ?? 0;
+        (await c.getStats()).forEach((s: { type?: string; kind?: string; framesDecoded?: number; bytesReceived?: number }) => {
+          if (s.type === 'inbound-rtp' && s.kind === 'video') {
+            frames = s.framesDecoded ?? 0;
+            bytes = s.bytesReceived ?? 0;
+          }
         });
       } catch {
         continue;
       }
       const p = this.progress.get(c.id);
-      if (!p || frames > p.frames) {
-        this.progress.set(c.id, { frames, since: now, askedKeyFrame: false });
+      if (!p || (frames > p.frames && !hidden)) {
+        this.progress.set(c.id, { frames, since: now, askedKeyFrame: false, bytes, bytesSince: p && bytes <= p.bytes ? p.bytesSince : now });
+        continue;
+      }
+      if (bytes > p.bytes) {
+        p.bytes = bytes;
+        p.bytesSince = now;
+      }
+      // O transmissor segue mandando ao servidor, mas aqui não chega nada há 10 s: o servidor parou de repassar
+      // (a estimativa de banda até este navegador desabou depois de muita perda) e não volta sozinho.
+      // Refaz a recepção, que recomeça a estimativa do zero. Tela parada de verdade não entra aqui
+      // (nesse caso a fonte também para de mandar).
+      if (now - p.bytesSince > 10_000 && this.sourceActive.get(c.id) && now - this.lastRecvRebuild > 30_000) {
+        await this.rebuildRecv('sem-dados');
+        return;
+      }
+      if (hidden) {
+        p.since = now; // ao voltar para a aba, a contagem de imagem parada recomeça
         continue;
       }
       const stalled = now - p.since;
@@ -778,9 +817,43 @@ export class RoomSession {
     this.update({ watched, error: watched.length ? null : this.snapshot.error });
   }
 
-  requestKeyFrame(key: string) {
+  /**
+   * Botão "Atualizar imagem": pede um quadro completo; se em 3 s a imagem não andar, refaz a recepção inteira
+   * (mesmo efeito de um F5, sem sair da sala).
+   */
+  async requestKeyFrame(key: string) {
     const w = this.snapshot.watched.find((x) => x.key === key);
-    if (w) void this.req('requestKeyFrame', { consumerId: w.videoConsumerId }).catch(() => {});
+    const c = w && [...this.consumers.values()].find((x) => x.id === w.videoConsumerId);
+    if (!w || !c) return;
+    const frames = async () => {
+      let n = 0;
+      try {
+        (await c.getStats()).forEach((s: { type?: string; kind?: string; framesDecoded?: number }) => {
+          if (s.type === 'inbound-rtp' && s.kind === 'video') n = s.framesDecoded ?? 0;
+        });
+      } catch {}
+      return n;
+    };
+    const before = await frames();
+    void this.req('requestKeyFrame', { consumerId: c.id }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 3_000));
+    if (this.closed || c.closed || (await frames()) > before) return;
+    await this.rebuildRecv('manual');
+  }
+
+  /** Fecha a recepção (no navegador e no servidor) e abre de novo, com todos os vídeos e sons assistidos. */
+  private async rebuildRecv(motivo: string) {
+    if (this.closed || this.snapshot.phase !== 'joined') return;
+    this.lastRecvRebuild = Date.now();
+    this.diag('recepcao-refeita', { motivo });
+    const old = this.recvTransport;
+    for (const pid of [...this.consumers.keys()]) this.dropConsumerFor(pid);
+    this.recvTransport = null;
+    if (old && !old.closed) {
+      old.close();
+      await this.req('closeTransport', { transportId: old.id }).catch(() => {});
+    }
+    await this.syncConsumers();
   }
 
   // ---------- câmera ----------
@@ -1323,6 +1396,7 @@ export class RoomSession {
         bandaKbps: tx.path?.availableKbps ?? null,
         rtt: tx.path?.rttMs ?? null,
         caminho: tx.path ? `${tx.path.protocol}/${tx.path.localType}` : null,
+        rota: rotaDe(tx.path?.remote),
         pli: tx.pliCount,
         nack: tx.nackCount,
       },
@@ -1349,6 +1423,7 @@ export class RoomSession {
           nota: w?.score ?? null,
           rtt: x.path?.rttMs ?? null,
           bandaKbps: x.path?.availableKbps ?? null,
+          rota: rotaDe(x.path?.remote),
         };
       }),
       eventos: this.diagEvents.splice(0),

@@ -126,7 +126,7 @@ export default function RoomView({
     hasAudio: w.hasAudio,
     badge: w.layer.count > 1 && w.layer.current !== null && w.layer.current < w.layer.count - 1 ? 'qualidade reduzida (conexão)' : null,
     onClose: () => session.unwatch(w.key),
-    onKeyFrame: w.source === 'screen' ? () => session.requestKeyFrame(w.key) : undefined,
+    onKeyFrame: w.source === 'screen' ? () => void session.requestKeyFrame(w.key) : undefined,
   });
   const screenWatched = s.watched.filter((w) => w.source === 'screen');
   const tiles: Tile[] = screenWatched.map(toTile);

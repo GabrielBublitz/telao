@@ -553,6 +553,9 @@ export function createSignaling({ httpServer, config, rooms, media, limiter, isO
           score: c.score?.score ?? null,
           spatialLayer: c.currentLayers?.spatialLayer ?? null,
           temporalLayer: c.currentLayers?.temporalLayer ?? null,
+          // O transmissor ainda manda vídeo ao servidor? Com isso o navegador distingue "o servidor parou de
+          // repassar por falta de banda" (precisa refazer a recepção) de "a fonte parou" (tela parada).
+          producerActive: (c.score?.producerScores ?? []).some((s) => s > 0),
         });
       }
     }

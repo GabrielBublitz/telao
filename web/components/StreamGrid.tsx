@@ -295,7 +295,7 @@ function StreamTile({ tile, compact = false }: { tile: Tile; compact?: boolean }
           </>
         )}
         {tile.onKeyFrame && !compact && (
-          <button className="ghost" onClick={tile.onKeyFrame} title="Pede um quadro completo ao transmissor (útil se a imagem travar)">
+          <button className="ghost" onClick={tile.onKeyFrame} title="Pede um quadro completo ao transmissor; se a imagem continuar travada, reconecta o vídeo (como um F5, sem sair da sala)">
             Atualizar imagem
           </button>
         )}
