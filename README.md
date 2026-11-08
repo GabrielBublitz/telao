@@ -496,7 +496,8 @@ telao/
 ├── web/                      # Next.js + React + TypeScript (export estático)
 │   ├── app/                  # / (início) e /sala
 │   ├── components/           # RoomApp, RoomView, Stage, BroadcastPanel, StatsPanel
-│   ├── lib/                  # session (mediasoup-client), signaling, stats, link, synthetic
+│   ├── lib/                  # session (conexão + assistir), publisher (transmitir + câmera),
+│   │                         # capture, session-types/-util, diag-sample, signaling, stats, link, synthetic
 │   └── vercel.json
 └── tests/e2e.mjs             # teste ponta a ponta multi-espectador (Playwright + Edge/Chrome)
 ```
