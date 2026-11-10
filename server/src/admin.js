@@ -1,8 +1,10 @@
 // Painel administrativo: escuta SOMENTE em 127.0.0.1. Cria/apaga salas e mostra os links e o diagnóstico.
 import http from 'node:http';
 import { SECURITY_HEADERS } from './static.js';
+import { listDays, summarizeDay } from './health.js';
+import { HEALTH_HTML } from './health-page.js';
 
-export function startAdmin({ port, rooms, getStatus, roomView, closeRoom, onChange, log }) {
+export function startAdmin({ port, rooms, getStatus, roomView, closeRoom, onChange, diagDir, log }) {
   const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
   const allowedOrigins = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
 
@@ -35,16 +37,24 @@ export function startAdmin({ port, rooms, getStatus, roomView, closeRoom, onChan
     const origin = req.headers.origin;
     if (req.method !== 'GET' && origin && !allowedOrigins.has(origin)) return json(res, 403, { error: 'Origem não permitida' });
 
-    const { pathname } = new URL(req.url ?? '/', 'http://local');
+    const { pathname, searchParams } = new URL(req.url ?? '/', 'http://local');
     try {
-      if (req.method === 'GET' && pathname === '/') {
+      if (req.method === 'GET' && (pathname === '/' || pathname === '/saude')) {
         res.writeHead(200, {
           ...SECURITY_HEADERS,
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'no-store',
           'Content-Security-Policy': "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
         });
-        return res.end(ADMIN_HTML);
+        return res.end(pathname === '/saude' ? HEALTH_HTML : ADMIN_HTML);
+      }
+      if (req.method === 'GET' && pathname === '/api/health/days') {
+        return json(res, 200, { days: diagDir ? listDays(diagDir) : [] });
+      }
+      if (req.method === 'GET' && pathname === '/api/health') {
+        const summary = diagDir ? await summarizeDay(diagDir, searchParams.get('dia') ?? '') : null;
+        if (!summary) return json(res, 404, { error: 'Dia sem diagnóstico' });
+        return json(res, 200, summary);
       }
       if (req.method === 'GET' && pathname === '/api/status') {
         return json(res, 200, { ...getStatus(), rooms: rooms.list().map(roomView) });
@@ -100,7 +110,7 @@ input{background:#0f1217;border:1px solid var(--line);color:var(--fg);border-rad
 code{background:#0f1217;border:1px solid var(--line);border-radius:6px;padding:6px 8px;display:block;word-break:break-all;font-size:12px;margin:6px 0}
 ul{margin:6px 0;padding-left:18px}
 </style></head><body><main>
-<h1>Telão · Painel do servidor</h1>
+<div class="row" style="justify-content:space-between"><h1>Telão · Painel do servidor</h1><a href="/saude"><button class="ghost">Saúde da sessão →</button></a></div>
 <p class="mut">Acessível apenas em <b>localhost</b>. Não compartilhe esta página; compartilhe só o link de cada sala.</p>
 <section class="card"><h2>Conectividade</h2><dl id="net"></dl><ul id="warn"></ul></section>
 <section class="card"><h2>Salas</h2>

@@ -158,7 +158,16 @@ httpServer.listen(config.httpPort, config.httpHost, () => {
   log.info(`[http] Site + sinalização em http://${config.httpHost}:${config.httpPort}`);
 });
 
-startAdmin({ port: config.adminPort, rooms, getStatus, roomView, closeRoom: signaling.closeRoom, onChange: saveRooms, log });
+startAdmin({
+  port: config.adminPort,
+  rooms,
+  getStatus,
+  roomView,
+  closeRoom: signaling.closeRoom,
+  onChange: saveRooms,
+  diagDir: path.join(DATA_DIR, 'diagnostico'), // mostra os dias gravados mesmo com o diagnóstico desligado agora
+  log,
+});
 
 if (config.tunnel === 'cloudflared' && !config.publicUrl) {
   startQuickTunnel({

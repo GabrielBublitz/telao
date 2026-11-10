@@ -426,6 +426,15 @@ Em ambos os casos:
 ### Diagnóstico de qualidade (arquivo)
 Durante as sessões, cada navegador manda ao servidor, a cada 2 s, o que está vendo: FPS da captura, do envio e da recepção, codificador (e se é pela placa de vídeo), limitação por processador/banda, perda, congelamentos e eventos como reconexões, troca de camada e "buracos" de vídeo (tela preta ou parada por mais de 1 s). Tudo vai para `server/.data/diagnostico/AAAA-MM-DD.jsonl`, só neste PC, apagado depois de 7 dias (máximo de 50 MB por dia). Para desligar: `DIAGNOSTICO=off` no `server/.env`.
 
+### Saúde da sessão (painel)
+No painel do servidor (`http://localhost:3002`), o botão **Saúde da sessão** (ou `http://localhost:3002/saude`) lê esse arquivo e mostra, para qualquer um dos últimos 7 dias:
+
+- **Resumo por pessoa**: quantas vezes e por quanto tempo cada um teve cada problema.
+- **Linha do tempo** minuto a minuto: o envio de cada pessoa e o que ela recebeu de cada transmissão, em verde/amarelo/vermelho. Passe o mouse para ver resolução, FPS, bitrate, perda, atraso, rota (local ou pública) e se a internet ou o processador limitavam o envio.
+- **Incidentes** com o motivo provável, em português: envio limitado pela internet, perda no caminho até quem assiste, queda geral (servidor/túnel), tela capturada parada etc. Quando a imagem trava para quem assiste por causa de quem transmite, aparece uma linha só, no transmissor, com "Afetou quem assistia: …". Clique num incidente para aproximar a linha do tempo naquele trecho.
+
+O dia de hoje se atualiza sozinho a cada 20 s. Fica só neste PC, como o resto do painel.
+
 ## 14. Checklist de segurança
 
 - [ ] O painel admin (`3002`) escuta só em `127.0.0.1`, recusa `Host` estranho (DNS rebinding) e POST de outras origens (CSRF). **Nunca** encaminhe a 3002 no roteador.
