@@ -314,12 +314,84 @@ h1 {
   font-size: 14px;
   line-height: 1.4;
 }
+/* Volume: botão de som + barra numa pílula só */
+.stage-actions .vol {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+.stage-actions .vol.muted {
+  padding-right: 0;
+}
+.stage-actions .vol button {
+  background: transparent;
+  border: 0;
+}
 .stage-actions .volume {
-  width: 90px;
+  --pct: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 96px;
+  height: 18px;
+  margin: 0;
   padding: 0;
   background: transparent;
   border: 0;
-  accent-color: var(--accent);
+  cursor: pointer;
+}
+.stage-actions .volume:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* Trilha: parte cheia na cor de destaque, o resto translúcido */
+.stage-actions .volume::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--pct), rgba(255, 255, 255, 0.25) var(--pct));
+}
+.stage-actions .volume::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.stage-actions .volume::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.stage-actions .volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.12s;
+}
+.stage-actions .volume::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.12s;
+}
+.stage-actions .volume:hover::-webkit-slider-thumb,
+.stage-actions .volume:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
+.stage-actions .volume:hover::-moz-range-thumb,
+.stage-actions .volume:active::-moz-range-thumb {
+  transform: scale(1.25);
 }
 
 /* Ícone de avisos de qualidade com balão (não empurra o layout) */

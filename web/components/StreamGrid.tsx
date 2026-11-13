@@ -276,8 +276,8 @@ function StreamTile({ tile, compact = false }: { tile: Tile; compact?: boolean }
       )}
       <div className="stage-actions tile-controls">
         {audible && (
-          <>
-            <button className="ghost" onClick={muted ? unmute : mute}>
+          <div className={`vol${muted ? ' muted' : ''}`}>
+            <button className="ghost" onClick={muted ? unmute : mute} title={muted ? 'Ativar som' : 'Silenciar'}>
               {muted ? '🔇' : '🔊'}
             </button>
             {!muted && (
@@ -289,10 +289,12 @@ function StreamTile({ tile, compact = false }: { tile: Tile; compact?: boolean }
                 value={volume}
                 onChange={(e) => setVolume(Number(e.target.value))}
                 aria-label="Volume"
+                title={`Volume ${Math.round(volume * 100)}%`}
                 className="volume"
+                style={{ '--pct': `${volume * 100}%` } as React.CSSProperties}
               />
             )}
-          </>
+          </div>
         )}
         {tile.onKeyFrame && !compact && (
           <button className="ghost" onClick={tile.onKeyFrame} title="Pede um quadro completo ao transmissor; se a imagem continuar travada, reconecta o vídeo (como um F5, sem sair da sala)">
