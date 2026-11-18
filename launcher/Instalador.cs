@@ -1,6 +1,13 @@
 // Instalador do Telão (modo direto, sem playit) e desinstalador.
 //   Telao-Instalador.exe     instala/atualiza (o app vai embutido como recurso "telao.zip")
 //   Desinstalar-Telao.exe    mesmo código, sem o recurso: remove o Telão
+// Opções (todas opcionais; sem nenhuma, pergunta o que precisar):
+//   --silencioso                 não pergunta nada (para scripts e agentes de IA)
+//   --pasta C:\caminho            instala em outra pasta (padrão: %LOCALAPPDATA%\Programs\Telao)
+//   --porta 40000                porta UDP/TCP do vídeo na primeira instalação (padrão 40000)
+//   --iniciar-com-windows        abre o Telão sozinho quando a pessoa entra no Windows
+//   --nao-iniciar-com-windows    tira do início automático
+//   --nao-abrir                  não abre o Telão no fim
 // Compilado com o csc.exe do .NET Framework que já vem no Windows (veja scripts\gerar-instalador.ps1).
 using System;
 using System.Diagnostics;
@@ -66,10 +73,21 @@ class Instalador
         Ok(update ? "Arquivos atualizados (suas salas e configurações foram mantidas)." : "Arquivos copiados.");
 
         string env = Path.Combine(dir, @"server\.env");
+        int port = 40000;
+        string portArg = Arg(args, "--porta");
+        if (portArg != null && (!int.TryParse(portArg, out port) || port < 1024 || port > 65535))
+        {
+            Fail("--porta precisa ser um número entre 1024 e 65535.");
+            return 1;
+        }
         if (!File.Exists(env))
         {
-            File.WriteAllText(env, DirectModeEnv, new UTF8Encoding(false));
-            Ok("Configuração do modo direto criada (porta 40000, roteador via UPnP, salas de 7 dias).");
+            File.WriteAllText(env, DirectModeEnv.Replace("40000", port.ToString()), new UTF8Encoding(false));
+            Ok("Configuração do modo direto criada (porta " + port + ", roteador via UPnP, salas de 7 dias).");
+        }
+        else if (portArg != null)
+        {
+            Warn("Já existe uma configuração (server\\.env): a porta não foi trocada. Para trocar, edite MEDIA_UDP_PORT/MEDIA_TCP_PORT nele.");
         }
         else
         {
@@ -89,7 +107,9 @@ class Instalador
             Ok("Atalhos na Área de Trabalho e no menu Iniciar.");
 
             string startup = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), AppName + ".lnk");
-            if (Ask("Iniciar o Telão automaticamente quando o Windows ligar?", false))
+            bool autostart = Has(args, "--iniciar-com-windows") ||
+                (!Has(args, "--nao-iniciar-com-windows") && (silent ? File.Exists(startup) : Ask("Iniciar o Telão automaticamente quando o Windows ligar?", File.Exists(startup))));
+            if (autostart)
             {
                 Shortcut(startup, exe, "--sem-navegador");
                 Ok("Vai iniciar junto com o Windows.");
@@ -110,9 +130,12 @@ class Instalador
         Console.WriteLine();
         Console.WriteLine("  Importante: o roteador precisa aceitar conexões de fora.");
         Console.WriteLine("  O Telão tenta abrir a porta sozinho (UPnP). O painel mostra se deu certo;");
-        Console.WriteLine("  se não der, abra no roteador UDP e TCP 40000 para este PC.");
+        Console.WriteLine("  se não der, abra no roteador UDP e TCP " + CurrentPort(env) + " para este PC.");
         Console.WriteLine();
-        if (!noSystem && Ask("Abrir o Telão agora?", true)) Process.Start(Path.Combine(dir, "Telao.exe"));
+        Console.WriteLine("  Para conferir tudo depois de abrir:");
+        Console.WriteLine("    powershell -ExecutionPolicy Bypass -File \"" + Path.Combine(dir, @"scripts\verificar.ps1") + "\"");
+        Console.WriteLine();
+        if (!noSystem && !Has(args, "--nao-abrir") && Ask("Abrir o Telão agora?", true)) Process.Start(Path.Combine(dir, "Telao.exe"));
         Pause();
         return 0;
     }
@@ -129,6 +152,18 @@ class Instalador
         "MEDIA_UPNP=auto\r\n" +
         "MEDIA_IPV6=off\r\n" +
         "ROOM_TTL_HOURS=168\r\n";
+
+    /// Porta de vídeo configurada (para as mensagens), lida do server\.env.
+    static string CurrentPort(string env)
+    {
+        try
+        {
+            foreach (string line in File.ReadAllLines(env))
+                if (line.StartsWith("MEDIA_UDP_PORT=")) return line.Substring("MEDIA_UDP_PORT=".Length).Trim();
+        }
+        catch { }
+        return "40000";
+    }
 
     static Stream Payload()
     {

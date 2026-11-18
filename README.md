@@ -365,6 +365,18 @@ Isso gera **`dist\Telao-Instalador.exe`** (~57 MB), com o app inteiro embutido. 
 
 O Windows pode mostrar "O Windows protegeu o computador" porque o instalador não tem assinatura digital, que é paga. Basta clicar em **Mais informações → Executar assim mesmo**.
 
+### Pacote completo para o amigo (com guia para o agente de IA dele)
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\gerar-pacote-amigo.ps1
+```
+
+Gera **`dist\Telao-para-amigo.zip`** com o instalador, o `LEIA-ME.md` (para a pessoa) e o `AGENTE-IA.md` (para um agente de IA instalar, verificar e consertar sozinho: opções do instalador, árvore de decisão por tipo de rede, Windows Server/VM na nuvem, playit como plano B, API do painel e regras do que ele não pode fazer sem perguntar). Os guias ficam em `docs\amigo\`.
+
+- **Trava de privacidade:** o gerador do instalador abre o pacote e aborta se encontrar `server\.env`, `server\.data` ou qualquer valor do `.sensitive.local` (IPs e endereços deste PC). O gerador do zip faz o mesmo nos guias.
+- **Instalação sem perguntas** (para scripts e agentes): `Telao-Instalador.exe --silencioso --iniciar-com-windows`. Outras opções: `--pasta`, `--porta`, `--nao-iniciar-com-windows`, `--nao-abrir`.
+- **Verificação:** `scripts\verificar.ps1` (instalado junto) diz em português se o Telão está rodando, o firewall, a porta do vídeo, o link público, o roteador (UPnP, NAT duplo, CGNAT) e o link de cada sala. Com `-Json`, sai em JSON; o código de saída é `0` (pronto), `1` (não está rodando) ou `2` (pendências).
+
 ## 11. Atualizar sem derrubar ninguém
 
 - **As salas ficam salvas** em `server/.data/rooms.json`, então os links continuam válidos depois de reiniciar o servidor.
